@@ -264,13 +264,12 @@
 <div id="auth">
   <div class="kick">Access from anywhere</div>
   <h1>The Ledger</h1>
-  <div class="authsub" id="authSub">Sign in to sync your ledger across devices</div>
+  <div class="authsub" id="authSub">Invite-only — sign in with the account your admin set up</div>
   <div class="authcard">
     <div class="field"><label>Email</label><input id="authEmail" class="inp" type="email" autocomplete="username" placeholder="you@email.com"></div>
     <div class="field"><label>Password</label><input id="authPass" class="inp" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="auth-msg" id="authMsg"></div>
     <button class="btn" id="authBtn" onclick="doAuth()">Sign in</button>
-    <div class="auth-toggle" id="authToggle">New here? <button onclick="toggleAuthMode()">Create an account</button></div>
   </div>
   <button class="auth-skip" onclick="skipAuth()">Use on this device only</button>
 </div>
@@ -449,10 +448,10 @@
    Do NOT use the "sb_secret_" key here — that one is admin-level and must
    never ship in a web page. Project URL is already filled in.               */
 const SUPABASE_URL = "https://gtbsjtllhjdpdvmakldr.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_ApfIGNqSMj7pfiN8_ZpKVw_Izrsq2kZ";   // <-- paste your sb_publishable_... key here
+const SUPABASE_ANON_KEY = "";   // <-- paste your sb_publishable_... key here
 /* ========================================================================= */
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const KEY="ledger_state_v2";
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
@@ -512,7 +511,9 @@ async function saveState(){
   return ok;
 }
 
-/* ---- Supabase ---- */
+/* ---- Supabase (shared household ledger) ---- */
+const HOUSEHOLD_ID="household";
+let lastCloudError="";
 async function cloudInit(){
   if(!cloudEnabled) return;
   try{
@@ -520,43 +521,37 @@ async function cloudInit(){
     sb=mod.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
     const {data:{session}}=await sb.auth.getSession();
     sbUser=session?session.user:null;
-  }catch(e){console.error("cloud init failed",e);sb=null;}
+  }catch(e){lastCloudError=e.message||String(e);console.error("cloud init failed",e);sb=null;}
 }
 async function cloudPull(){
   if(!sb||!sbUser) return null;
   setSync("syncing");
   try{
-    const {data,error}=await sb.from("ledger_data").select("data,updated_at").eq("user_id",sbUser.id).maybeSingle();
+    const {data,error}=await sb.from("household_ledger").select("data,updated_at").eq("id",HOUSEHOLD_ID).maybeSingle();
     if(error)throw error;
-    setSync("synced");
+    lastCloudError="";setSync("synced");
     return data?data.data:null;
-  }catch(e){console.error("pull failed",e);setSync("offline");return null;}
+  }catch(e){lastCloudError=e.message||String(e);console.error("pull failed",e);setSync("offline");return null;}
 }
-function cloudSaveDebounced(){
-  setSync("syncing");
-  clearTimeout(cloudSaveTimer);
-  cloudSaveTimer=setTimeout(cloudPush,900);
-}
+function cloudSaveDebounced(){setSync("syncing");clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(cloudPush,900);}
 async function cloudPush(){
-  if(!sb||!sbUser){setSync(cloudEnabled?"signin":"local");return;}
+  if(!sb||!sbUser){setSync(cloudEnabled?"signin":"local");return false;}
   try{
-    const {error}=await sb.from("ledger_data").upsert({user_id:sbUser.id,data:S,updated_at:new Date().toISOString()});
+    const {error}=await sb.from("household_ledger").upsert({id:HOUSEHOLD_ID,data:S,updated_at:new Date().toISOString()});
     if(error)throw error;
-    setSync("synced");
-  }catch(e){console.error("push failed",e);setSync("offline");}
+    lastCloudError="";setSync("synced");return true;
+  }catch(e){lastCloudError=e.message||String(e);console.error("push failed",e);setSync("offline");return false;}
 }
-async function cloudSignIn(email,password,mode){
-  if(!sb)return{ok:false,msg:"Cloud not configured"};
+async function cloudSignIn(email,password){
+  if(!sb)return{ok:false,msg:"Cloud isn't configured"};
   try{
-    const fn=mode==="signup"?sb.auth.signUp:sb.auth.signInWithPassword;
-    const {data,error}=await fn.call(sb.auth,{email,password});
+    const {data,error}=await sb.auth.signInWithPassword({email,password});
     if(error)throw error;
-    if(!data.user)return{ok:false,msg:"Check your email to confirm, then sign in."};
-    sbUser=data.user;
-    return{ok:true};
+    if(!data.session)return{ok:false,msg:"Confirm your email first, then sign in."};
+    sbUser=data.user;return{ok:true};
   }catch(e){return{ok:false,msg:e.message||"Sign-in failed"};}
 }
-async function cloudSignOut(){try{await sb.auth.signOut();}catch(e){}sbUser=null;setSync("signin");}
+async function cloudSignOut(){try{await sb.auth.signOut();}catch(e){}sbUser=null;setSync(cloudEnabled?"signin":"local");}
 
 /* ============================== SEED ============================== */
 const BILL_END="";  // bills run with no end date
@@ -568,7 +563,7 @@ function seed(){
     settings:{startDate:"2026-06-09",months:24,openingBalance:0,theme:"light"},
     migrations:{endDate2027:true,noEndAnd2yr:true},
     security:{pinHash:null},
-    history:{months:6,items:["Electric","Water","Gas"],values:{}},
+    history:{months:6,items:["Electric","Water","Gas"],budgets:{},values:{}},
     bills:[
       bill(true,"Rent (1/2)","Bills","Rent",2950,"Monthly",1),
       bill(true,"Verizon (1/2)","Bills","Phone",200,"Monthly",25),
@@ -919,23 +914,33 @@ function histMonthsList(){
   return out;
 }
 function histGet(item,key){const v=(S.history.values[item]||{})[key];return (v===0||v)?v:"";}
+function histBudget(item){const v=(S.history.budgets||{})[item];return (v===0||v)?v:"";}
 function renderHistory(){
   document.getElementById("histMonths").value=S.history.months||6;
   const months=histMonthsList();
   const items=S.history.items||[];
   const t=document.getElementById("histTable");
   if(!items.length){t.innerHTML=`<tbody><tr><td class="empty">Add a row to start tracking a bill's history.</td></tr></tbody>`;drawHist(months,items);return;}
-  const head=`<thead><tr><th>Bill</th>${months.map(m=>`<th class="r">${m.label}</th>`).join("")}<th class="r">Trend</th><th class="r"></th></tr></thead>`;
+  const head=`<thead><tr><th>Bill</th><th class="r">Budget</th>${months.map(m=>`<th class="r">${m.label}</th>`).join("")}<th class="r">Trend</th><th class="r"></th></tr></thead>`;
   const body=items.map(item=>{
-    const cells=months.map(m=>`<td class="r"><input class="actin" type="number" step="0.01" value="${histGet(item,m.key)}" oninput="editHist('${esc(item)}','${m.key}',this.value)"></td>`).join("");
-    // trend: last two filled values
+    const bud=histBudget(item);const budN=bud===""?null:Number(bud);
+    const cells=months.map(m=>{
+      const v=histGet(item,m.key);
+      let cls="";
+      if(budN!=null && v!==""){const diff=Number(v)-budN;cls=diff>0.0001?"var-over":(diff<-0.0001?"var-under":"");}
+      return `<td class="r"><input class="actin ${cls}" type="number" step="0.01" value="${v}" title="${budN!=null&&v!==''?('vs budget '+fmt$(Number(v)-budN)):''}" oninput="editHist('${esc(item)}','${m.key}',this.value)"></td>`;
+    }).join("");
     const vals=months.map(m=>histGet(item,m.key)).filter(v=>v!=="").map(Number);
     let trend='<span class="muted">—</span>';
     if(vals.length>=2){const a=vals[vals.length-2],b=vals[vals.length-1];const diff=b-a;const pct=a?Math.round(diff/a*100):0;
       if(diff>0)trend=`<span class="var-over">▲ ${pct}%</span>`;else if(diff<0)trend=`<span class="var-under">▼ ${Math.abs(pct)}%</span>`;else trend='<span class="muted">±0%</span>';}
-    return `<tr><td><b>${esc(item)}</b></td>${cells}<td class="r num" style="font-size:12px">${trend}</td><td class="r"><button class="iconbtn del" onclick="removeHistItem('${esc(item)}')">×</button></td></tr>`;
+    return `<tr><td><b>${esc(item)}</b></td>
+      <td class="r"><input class="actin" type="number" step="0.01" placeholder="—" value="${bud}" title="Budgeted / expected amount" onchange="editHistBudget('${esc(item)}',this.value)"></td>
+      ${cells}<td class="r num" style="font-size:12px">${trend}</td>
+      <td class="r"><button class="iconbtn del" onclick="removeHistItem('${esc(item)}')">×</button></td></tr>`;
   }).join("");
-  t.innerHTML=head+`<tbody>${body}</tbody>`;
+  t.innerHTML=head+`<tbody>${body}</tbody>`+
+    `<tfoot><tr><td colspan="${months.length+4}" class="muted" style="font-size:11.5px;padding-top:10px;border:0">Set a <b>Budget</b> per bill, then type what you actually paid each month. Green = under budget, amber = over.</td></tr></tfoot>`;
   drawHist(months,items);
 }
 function drawHist(months,items){
@@ -955,6 +960,12 @@ function editHist(item,key,val){
   else S.history.values[item][key]=toNum(val);
   saveState();
   drawHist(histMonthsList(),S.history.items); // redraw chart without rebuilding inputs (keeps focus)
+}
+function editHistBudget(item,val){
+  S.history.budgets=S.history.budgets||{};
+  if(val===""||val==null)delete S.history.budgets[item];
+  else S.history.budgets[item]=toNum(val);
+  saveState();renderHistory();
 }
 function addHistItem(){
   const name=(prompt("Name of the bill to track (e.g. Electric, Water, Cable):")||"").trim();
@@ -1022,40 +1033,41 @@ async function forgotPin(){
 }
 
 /* ============================== CLOUD AUTH UI ============================== */
-let authMode="signin";
-function showAuth(){const a=document.getElementById("auth");a.style.display="flex";document.getElementById("app").style.visibility="hidden";document.getElementById("lock").style.display="none";setAuthMode("signin");setSync("signin");}
-function setAuthMode(m){authMode=m;
-  document.getElementById("authBtn").textContent=m==="signup"?"Create account":"Sign in";
-  document.getElementById("authSub").textContent=m==="signup"?"Create an account to sync across devices":"Sign in to sync your ledger across devices";
-  document.getElementById("authToggle").innerHTML=m==="signup"?`Already have an account? <button onclick="toggleAuthMode()">Sign in</button>`:`New here? <button onclick="toggleAuthMode()">Create an account</button>`;
-  document.getElementById("authMsg").textContent="";
-  document.getElementById("authPass").setAttribute("autocomplete",m==="signup"?"new-password":"current-password");
-}
-function toggleAuthMode(){setAuthMode(authMode==="signin"?"signup":"signin");}
+function showAuth(){const a=document.getElementById("auth");a.style.display="flex";document.getElementById("app").style.visibility="hidden";document.getElementById("lock").style.display="none";document.getElementById("authMsg").textContent="";setSync("signin");}
 async function doAuth(){
   const email=document.getElementById("authEmail").value.trim();const pass=document.getElementById("authPass").value;const msg=document.getElementById("authMsg");
   if(!email||!pass){msg.textContent="Enter your email and password";return;}
-  if(pass.length<6){msg.textContent="Password must be at least 6 characters";return;}
   const btn=document.getElementById("authBtn");const lbl=btn.textContent;btn.textContent="…";btn.disabled=true;
-  const res=await cloudSignIn(email,pass,authMode);
+  const res=await cloudSignIn(email,pass);
   btn.disabled=false;btn.textContent=lbl;
   if(!res.ok){msg.textContent=res.msg;return;}
   msg.textContent="";await afterSignedIn();
 }
 function skipAuth(){document.getElementById("auth").style.display="none";proceedLocal();}
+function cloudErrorFriendly(){
+  const m=lastCloudError||"";
+  if(/relation|does not exist|could not find the table|schema cache/i.test(m)) return "The database tables aren't set up yet — run the setup SQL in Supabase, then sign in again.";
+  if(/row-level|policy|permission|denied|not allowed|violates/i.test(m)) return "This account isn't approved for the shared ledger yet. Ask the admin to add you.";
+  if(/network|fetch|failed to fetch/i.test(m)) return "Can't reach Supabase — check the Project URL and your connection.";
+  if(/invalid api key|jwt|apikey/i.test(m)) return "The publishable key looks off — paste the sb_publishable_ key, not the secret one.";
+  return m?("Sync error: "+m):"Couldn't reach the cloud.";
+}
 
 function renderCloudStatus(){
   const el=document.getElementById("cloudStatus");if(!el)return;
-  const ver=`<div class="muted" style="font-size:11.5px;margin-top:14px">Version ${APP_VERSION}${persistAvailable?"":" · ⚠︎ this browser isn't saving locally — host the file or sign in to keep changes"}</div>`;
+  const ver=`<div class="muted" style="font-size:11.5px;margin-top:14px">Version ${APP_VERSION}${persistAvailable?"":" · ⚠︎ this browser isn't saving locally"}</div>`;
   if(!cloudEnabled){
-    el.innerHTML=`<div class="muted" style="font-size:13px;line-height:1.6">Cloud sync isn't set up yet. To turn it on, create a free <a href="https://supabase.com" target="_blank">Supabase</a> project, run the one-time SQL from the setup notes, then paste your <b>Project URL</b> and <b>publishable key</b> into the two constants at the top of this file and re-deploy. Until then, everything saves to this device.</div>`+ver;
+    el.innerHTML=`<div class="muted" style="font-size:13px;line-height:1.6">Cloud sync isn't set up yet. Create a free <a href="https://supabase.com" target="_blank">Supabase</a> project, run the one-time setup SQL, then paste your <b>Project URL</b> and <b>publishable key</b> (<code>sb_publishable_…</code>) into the two constants at the top of this file and re-deploy.</div>`+ver;
     return;
   }
+  let body;
   if(sbUser){
-    el.innerHTML=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill savings">Synced</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="settingsSignOut()" style="margin-left:auto">Sign out</button></div>`+ver;
+    const warn=(syncState==="offline"||lastCloudError)?`<div class="auth-msg" style="margin-top:8px">${esc(cloudErrorFriendly())}</div>`:"";
+    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill ${syncState==='offline'?'debt':'savings'}">${syncState==='offline'?'Offline':'Synced'}</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="settingsSignOut()" style="margin-left:auto">Sign out</button></div>${warn}`;
   }else{
-    el.innerHTML=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill subs">Not signed in</span><span class="muted" style="font-size:13px">Sign in to pull your ledger onto this device.</span><button class="btn sm" onclick="showAuth()" style="margin-left:auto">Sign in</button></div>`+ver;
+    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill subs">Not signed in</span><span class="muted" style="font-size:13px">Sign in to load the shared ledger.</span><button class="btn sm" onclick="showAuth()" style="margin-left:auto">Sign in</button></div>`;
   }
+  el.innerHTML=body+ver;
 }
 async function settingsSignOut(){await cloudSignOut();renderCloudStatus();toast("Signed out");}
 
@@ -1066,6 +1078,7 @@ function runMigrations(){
   S.history=S.history||{months:6,items:["Electric","Water","Gas"],values:{}};
   if(!Array.isArray(S.history.items))S.history.items=["Electric","Water","Gas"];
   S.history.values=S.history.values||{};
+  S.history.budgets=S.history.budgets||{};
   if(!S.history.months)S.history.months=6;
   if(!S.settings.theme)S.settings.theme="light";
   if(!S.migrations.endDate2027){S.bills.forEach(b=>{b.endDate=BILL_END;});S.migrations.endDate2027=true;}
@@ -1089,15 +1102,29 @@ function proceedLocal(){
 async function afterSignedIn(){
   setSync("syncing");
   setLoad&&setLoad("Loading your ledger…");
+  lastCloudError="";
   const cloud=await cloudPull();
-  if(cloud) S=cloud;                 // cloud is the source of truth
-  runMigrations();
+  if(lastCloudError){            // pull errored (tables missing / network / key)
+    return denyCloud();
+  }
+  if(cloud){ S=cloud; runMigrations(); }
+  else{                          // no shared row yet — try to create it (proves membership)
+    runMigrations();
+    const ok=await cloudPush();
+    if(!ok) return denyCloud();
+  }
   applyTheme(S.settings.theme||"light");
-  await saveState();                 // caches locally + creates/updates cloud row
+  await saveState();
   document.getElementById("auth").style.display="none";
   document.getElementById("loader").style.display="none";
   setSync("synced");
   initLock();
+}
+async function denyCloud(){
+  document.getElementById("loader").style.display="none";
+  showAuth();
+  document.getElementById("authMsg").textContent=cloudErrorFriendly();
+  await cloudSignOut();
 }
 (async function(){
   baseChartOpts();
