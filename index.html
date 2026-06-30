@@ -137,6 +137,19 @@
 
   /* Tracker */
   .track-head{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .hero{display:flex;gap:24px;align-items:center;flex-wrap:wrap;background:linear-gradient(120deg,var(--sage-soft),var(--gold-soft));border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+  .hero.hero-warn{background:linear-gradient(120deg,var(--clay-soft),var(--gold-soft))}
+  .hero-main{min-width:200px}
+  .hero-lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);font-weight:600}
+  .hero-val{font-family:'Spline Sans Mono',monospace;font-size:38px;font-weight:600;line-height:1.1;margin-top:4px}
+  .hero-sub{font-size:12.5px;color:var(--text-dim);margin-top:4px}
+  .hero-bar-wrap{flex:1;min-width:220px}
+  .hero-bar{display:flex;height:14px;background:var(--surface3);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+  .hero-bar .seg{height:100%}
+  .hero-bar .seg.paid{background:var(--sage)}
+  .hero-bar .seg.owed{background:var(--clay)}
+  .hero-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--text-dim)}
+  .hero-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
   .progress{height:9px;background:var(--surface3);border-radius:999px;overflow:hidden}
   .progress>div{height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));transition:width .4s;border-radius:999px}
   .paidrow{opacity:.55}
@@ -300,6 +313,7 @@
     <button data-tab="history" onclick="go('history')">History</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
     <button data-tab="income" onclick="go('income')">Income</button>
+    <button data-tab="wedding" onclick="go('wedding')">Wedding</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
   </nav>
 
@@ -323,22 +337,16 @@
   <!-- TRACKER -->
   <section id="view-tracker" class="hide">
     <div class="sec-h">
-      <div><h2 id="trackTitle">This Month</h2><div class="desc">Tick things off as you pay them, and pop in the real amount to see how it compares to plan.</div></div>
+      <div><h2 id="trackTitle">This Month</h2><div class="desc">Tick things off as you pay them, drop in the real amount, and watch what's left to spend.</div></div>
     </div>
+    <div id="spendHero"></div>
     <div class="track-head" id="trackKpis"></div>
-    <div class="panel" style="margin-bottom:16px">
-      <div class="sec-h" style="margin-bottom:10px;align-items:center">
-        <div><h2 style="font-size:22px">Scheduled this month</h2></div>
-        <div class="muted" id="trackCount" style="font-size:12px"></div>
-      </div>
-      <div class="scrollx"><table id="trackTable"></table></div>
-    </div>
     <div class="panel">
       <div class="sec-h" style="margin-bottom:10px;align-items:center">
-        <div><h2 style="font-size:22px">Unplanned spending</h2><div class="desc">One-off buys that aren't recurring bills.</div></div>
+        <div><h2 style="font-size:22px">This month's money</h2><div class="muted" id="trackCount" style="font-size:12px;margin-top:4px"></div></div>
         <button class="btn sm" onclick="addAdhoc()">+ Add expense</button>
       </div>
-      <div class="scrollx"><table id="adhocTable"></table></div>
+      <div class="scrollx"><table id="trackTable"></table></div>
     </div>
   </section>
 
@@ -408,6 +416,24 @@
     <div class="panel scrollx"><table id="incomeTable"></table></div>
   </section>
 
+  <!-- WEDDING -->
+  <section id="view-wedding" class="hide">
+    <div class="sec-h">
+      <div><h2>Wedding</h2><div class="desc">A separate budget for the big day — tracked in the same app and synced with everything else. Set a target, log estimates and deposits, and see what's left.</div></div>
+      <button class="btn" onclick="addWeddingItem()">+ Add item</button>
+    </div>
+    <div id="weddingHero"></div>
+    <div class="grid kpis" id="weddingKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
+    <div class="grid charts" style="grid-template-columns:1fr 1.2fr">
+      <div class="panel">
+        <div class="chart-h">Where it's going</div>
+        <div class="chart-s">Estimated cost by item</div>
+        <div class="chart-box tall"><canvas id="weddingChart"></canvas></div>
+      </div>
+      <div class="panel scrollx"><table id="weddingTable"></table></div>
+    </div>
+  </section>
+
   <!-- SETTINGS -->
   <section id="view-settings" class="hide">
     <div class="sec-h"><div><h2>Settings</h2><div class="desc">Forecast horizon, cloud sync and your data.</div></div></div>
@@ -444,20 +470,28 @@
 
 <script>
 /* ============================== CLOUD CONFIG ==============================
-   Paste your Supabase PUBLISHABLE key below (it starts with "sb_publishable_").
-   Do NOT use the "sb_secret_" key here — that one is admin-level and must
-   never ship in a web page. Project URL is already filled in.               */
-const SUPABASE_URL = "https://gtbsjtllhjdpdvmakldr.supabase.co";
-const SUPABASE_ANON_KEY = "";   // <-- paste your sb_publishable_... key here
+   You do NOT need to edit this file to enable cloud sync — you can paste your
+   Supabase URL + publishable key right inside the app (Settings → Cloud sync).
+   Optionally, set defaults here so every deploy ships pre-connected.
+   Always use the PUBLISHABLE key (sb_publishable_…), never the secret one.  */
+const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional default
+const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.3.0";
 const KEY="ledger_state_v2";
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
 
 // cloud runtime
-const cloudEnabled = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const CFG_KEY="ledger_cloud_cfg";
+function loadCloudCfg(){
+  try{const v=localStorage.getItem(CFG_KEY);if(v){const o=JSON.parse(v);if(o&&o.url&&o.key)return {url:o.url,key:o.key};}}catch(e){}
+  return {url:cloudEnvUrl,key:cloudEnvKey};
+}
+function saveCloudCfg(url,key){try{localStorage.setItem(CFG_KEY,JSON.stringify({url,key}));}catch(e){}}
+let cloudCfg=loadCloudCfg();
+let cloudEnabled = !!(cloudCfg.url && cloudCfg.key);
 let sb=null, sbUser=null, cloudSaveTimer=null, syncState="local";
 
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
@@ -518,7 +552,7 @@ async function cloudInit(){
   if(!cloudEnabled) return;
   try{
     const mod=await import("https://esm.sh/@supabase/supabase-js@2");
-    sb=mod.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+    sb=mod.createClient(cloudCfg.url,cloudCfg.key,{auth:{persistSession:true,autoRefreshToken:true}});
     const {data:{session}}=await sb.auth.getSession();
     sbUser=session?session.user:null;
   }catch(e){lastCloudError=e.message||String(e);console.error("cloud init failed",e);sb=null;}
@@ -564,6 +598,14 @@ function seed(){
     migrations:{endDate2027:true,noEndAnd2yr:true},
     security:{pinHash:null},
     history:{months:6,items:["Electric","Water","Gas"],budgets:{},values:{}},
+    wedding:{budget:0,items:[
+      {id:uid(),item:"Venue",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+      {id:uid(),item:"Catering",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+      {id:uid(),item:"Photographer",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+      {id:uid(),item:"Attire",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+      {id:uid(),item:"Flowers",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+      {id:uid(),item:"Music / DJ",vendor:"",dueDate:"",estimated:0,paid:0,notes:""},
+    ]},
     bills:[
       bill(true,"Rent (1/2)","Bills","Rent",2950,"Monthly",1),
       bill(true,"Verizon (1/2)","Bills","Phone",200,"Monthly",25),
@@ -664,6 +706,7 @@ function renderAll(){const events=buildForecast();const keys=monthKeys(events);p
   if(activeTab==="tracker")renderTracker(events);
   if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);}
   if(activeTab==="history")renderHistory();
+  if(activeTab==="wedding")renderWedding();
   if(activeTab==="bills")renderBills();
   if(activeTab==="income")renderIncome();
   if(activeTab==="settings")fillSettings();}
@@ -789,41 +832,87 @@ function getActual(occId){const m=S.actuals[selMonth]||{};return m[occId]||null;
 function setActual(occId,patch){if(!S.actuals[selMonth])S.actuals[selMonth]={};S.actuals[selMonth][occId]=Object.assign({paid:false,actual:null},S.actuals[selMonth][occId],patch);saveState();}
 function renderTracker(events){
   document.getElementById("trackTitle").textContent=monthLabel(selMonth);
+  const keys=monthKeys(events);
   const mEvents=events.filter(e=>e.monthKey===selMonth);
-  const expenses=mEvents.filter(e=>e.type==="Expense");const incomes=mEvents.filter(e=>e.type==="Income");const adhoc=(S.adhoc[selMonth]||[]);
-  const budget=expenses.reduce((s,e)=>s+e.amount,0);
-  let paidCount=0,spent=0,remaining=0;
-  expenses.forEach(e=>{const a=getActual(e.occId);if(a&&a.paid){paidCount++;spent+=(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;}else remaining+=e.amount;});
-  adhoc.forEach(x=>spent+=toNum(x.amount));
+  const expenses=mEvents.filter(e=>e.type==="Expense");
+  const incomes=mEvents.filter(e=>e.type==="Income");
+  const adhoc=(S.adhoc[selMonth]||[]);
+  const opening=monthOpening(events,selMonth,keys);
   const incomeTotal=incomes.reduce((s,e)=>s+e.amount,0);
+
+  // effective spend per item; paid vs unpaid
+  let paidCount=0,totalCount=0,spent=0,stillToPay=0,obligations=0;
+  expenses.forEach(e=>{
+    totalCount++;
+    const a=getActual(e.occId)||{paid:false,actual:null};
+    const eff=(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;
+    obligations+=eff;
+    if(a.paid){paidCount++;spent+=eff;}else stillToPay+=eff;
+  });
+  adhoc.forEach(x=>{
+    totalCount++;
+    const amt=toNum(x.amount);obligations+=amt;
+    if(x.paid){paidCount++;spent+=amt;}else stillToPay+=amt;
+  });
+
+  const available=opening+incomeTotal;          // cash you have to work with this month
+  const leftToSpend=available-obligations;       // cushion after every bill this month
+  const cushionCls=leftToSpend<0?"neg":(leftToSpend<200?"gold":"pos");
+
+  // hero
+  const spentPctOfAvail=available>0?Math.max(0,Math.min(100,Math.round(spent/available*100))):0;
+  const owedPct=available>0?Math.max(0,Math.min(100,Math.round(stillToPay/available*100))):0;
+  document.getElementById("spendHero").innerHTML=`
+    <div class="hero ${leftToSpend<0?'hero-warn':''}">
+      <div class="hero-main">
+        <div class="hero-lab">Left to spend this month</div>
+        <div class="hero-val num ${cushionCls}">${fmt$0(leftToSpend)}</div>
+        <div class="hero-sub">${fmt$0(available)} available − ${fmt$0(obligations)} in bills${leftToSpend<0?" · over by "+fmt$0(-leftToSpend):""}</div>
+      </div>
+      <div class="hero-bar-wrap">
+        <div class="hero-bar"><span class="seg paid" style="width:${spentPctOfAvail}%"></span><span class="seg owed" style="width:${owedPct}%"></span></div>
+        <div class="hero-legend"><span><i style="background:var(--sage)"></i>Paid ${fmt$0(spent)}</span><span><i style="background:var(--clay)"></i>Still owed ${fmt$0(stillToPay)}</span><span><i style="background:var(--surface3)"></i>Free ${fmt$0(Math.max(0,leftToSpend))}</span></div>
+      </div>
+    </div>`;
+
   const cards=[
     {lab:"Expected income",val:fmt$0(incomeTotal),cls:"pos",dot:cv("--sage")},
-    {lab:"Budgeted bills",val:fmt$0(budget),cls:"info",dot:cv("--blue")},
-    {lab:"Spent so far",val:fmt$0(spent),cls:"gold",dot:cv("--gold")},
-    {lab:"Still to pay",val:fmt$0(remaining),cls:"neg",dot:cv("--clay")},
+    {lab:"Spent so far",val:fmt$0(spent),cls:"info",dot:cv("--blue")},
+    {lab:"Still to pay",val:fmt$0(stillToPay),cls:"neg",dot:cv("--clay")},
+    {lab:"Left to spend",val:fmt$0(leftToSpend),cls:cushionCls,dot:cv("--gold")},
   ];
   document.getElementById("trackKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
-  const pct=expenses.length?Math.round(paidCount/expenses.length*100):0;
-  document.getElementById("trackCount").innerHTML=`${paidCount} of ${expenses.length} paid · ${pct}%<div class="progress" style="width:150px;display:inline-block;vertical-align:middle;margin-left:10px"><div style="width:${pct}%"></div></div>`;
+  const pct=totalCount?Math.round(paidCount/totalCount*100):0;
+  document.getElementById("trackCount").innerHTML=`${paidCount} of ${totalCount} paid · ${pct}%<div class="progress" style="width:150px;display:inline-block;vertical-align:middle;margin-left:10px"><div style="width:${pct}%"></div></div>`;
+
+  // unified, date-sorted list
+  const rows=[];
+  incomes.forEach(e=>rows.push({sort:e.date,html:`<tr><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
+  expenses.forEach(e=>{
+    const a=getActual(e.occId)||{paid:false,actual:null};const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
+    rows.push({sort:e.date,html:`<tr class="${a.paid?'paidrow':''}"><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td></td></tr>`});
+  });
+  adhoc.forEach(x=>{
+    const d=parseDate(x.date)||parseDate(selMonth+"-15");
+    rows.push({sort:d,html:`<tr class="${x.paid?'paidrow':''}">
+      <td><input class="inp" type="date" value="${x.date||''}" style="width:148px;padding:5px 8px" onchange="editAdhoc('${x.id}','date',this.value)"></td>
+      <td><input class="inp" value="${esc(x.name||'')}" placeholder="What was it?" style="padding:5px 8px;min-width:120px" oninput="editAdhoc('${x.id}','name',this.value)"></td>
+      <td><span class="pill other" style="margin-bottom:4px;display:inline-block">Unplanned</span><input class="inp" value="${esc(x.category||'')}" placeholder="category" style="width:120px;padding:4px 8px" oninput="editAdhoc('${x.id}','category',this.value)"></td>
+      <td class="r muted">—</td>
+      <td class="r"><input class="actin" type="number" step="0.01" placeholder="0" value="${x.amount||''}" onchange="editAdhoc('${x.id}','amount',this.value)"></td>
+      <td class="r num muted">—</td>
+      <td class="r"><input class="chk" type="checkbox" ${x.paid?'checked':''} onchange="editAdhoc('${x.id}','paid',this.checked)"></td>
+      <td class="r"><button class="iconbtn del" onclick="delAdhoc('${x.id}')">×</button></td></tr>`});
+  });
+  rows.sort((a,b)=>a.sort-b.sort);
   const tbl=document.getElementById("trackTable");
-  if(!expenses.length&&!incomes.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing scheduled for ${monthLabel(selMonth)}.</td></tr></tbody>`;}
-  else{
-    const rows=[...incomes,...expenses].sort((a,b)=>a.date-b.date).map(e=>{
-      if(e.type==="Income")return `<tr><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td></tr>`;
-      const a=getActual(e.occId)||{paid:false,actual:null};const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
-      return `<tr class="${a.paid?'paidrow':''}"><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" oninput="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td></tr>`;
-    }).join("");
-    tbl.innerHTML=`<thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th></tr></thead><tbody>${rows}</tbody>`;
-  }
-  const at=document.getElementById("adhocTable");
-  if(!adhoc.length){at.innerHTML=`<tbody><tr><td class="empty" style="font-size:16px">Nothing logged yet.</td></tr></tbody>`;}
-  else{const rows=adhoc.map(x=>`<tr><td><input class="inp" type="date" value="${x.date||''}" style="width:155px;padding:6px 9px" onchange="editAdhoc('${x.id}','date',this.value)"></td><td><input class="inp" value="${esc(x.name||'')}" style="padding:6px 9px" oninput="editAdhoc('${x.id}','name',this.value)"></td><td><input class="inp" value="${esc(x.category||'')}" style="width:150px;padding:6px 9px" oninput="editAdhoc('${x.id}','category',this.value)"></td><td class="r"><input class="actin" type="number" step="0.01" value="${x.amount||''}" oninput="editAdhoc('${x.id}','amount',this.value)"></td><td class="r"><button class="iconbtn del" onclick="delAdhoc('${x.id}')">Remove</button></td></tr>`).join("");
-    at.innerHTML=`<thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
+  if(!rows.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing for ${monthLabel(selMonth)} yet — add an expense to start.</td></tr></tbody>`;}
+  else tbl.innerHTML=`<thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
 }
 function onActual(occId,v){setActual(occId,{actual:v});renderTracker(buildForecast());}
 function onPaid(occId,c){setActual(occId,{paid:c});renderTracker(buildForecast());}
-function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:""});saveState();renderTracker(buildForecast());}
-function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date")renderTracker(buildForecast());}
+function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:"",paid:false});saveState();renderTracker(buildForecast());}
+function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date"||field==="paid")renderTracker(buildForecast());}
 function delAdhoc(id){S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);saveState();renderTracker(buildForecast());}
 
 /* ============================== BILLS + BULK ============================== */
@@ -981,6 +1070,78 @@ function removeHistItem(item){
 }
 function setHistMonths(n){S.history.months=Math.max(1,Math.min(12,parseInt(n||6,10)));saveState();renderHistory();}
 
+/* ============================== WEDDING ============================== */
+function renderWedding(){
+  const w=S.wedding;const items=w.items||[];
+  const est=items.reduce((s,i)=>s+toNum(i.estimated),0);
+  const paid=items.reduce((s,i)=>s+toNum(i.paid),0);
+  const remaining=est-paid;
+  const target=toNum(w.budget);
+
+  // hero: target vs estimated, with paid progress
+  const overEst=target>0?est-target:0;
+  const paidPct=est>0?Math.max(0,Math.min(100,Math.round(paid/est*100))):0;
+  document.getElementById("weddingHero").innerHTML=`
+    <div class="hero">
+      <div class="hero-main">
+        <div class="hero-lab">Still to pay</div>
+        <div class="hero-val num ${remaining>0?'neg':'pos'}">${fmt$0(remaining)}</div>
+        <div class="hero-sub">${fmt$0(paid)} paid of ${fmt$0(est)} estimated${target>0?` · target ${fmt$0(target)}${overEst>0?` (over by ${fmt$0(overEst)})`:overEst<0?` (${fmt$0(-overEst)} under)`:""}`:""}</div>
+      </div>
+      <div class="hero-bar-wrap">
+        <div class="hero-bar"><span class="seg paid" style="width:${paidPct}%"></span></div>
+        <div class="hero-legend">
+          <span><i style="background:var(--sage)"></i>Paid ${fmt$0(paid)}</span>
+          <span><i style="background:var(--clay)"></i>Remaining ${fmt$0(Math.max(0,remaining))}</span>
+          <span style="margin-left:auto">Target <input class="actin" type="number" step="100" value="${w.budget||''}" placeholder="0" onchange="setWeddingBudget(this.value)" style="width:110px"></span>
+        </div>
+      </div>
+    </div>`;
+
+  const cards=[
+    {lab:"Target budget",val:target?fmt$0(target):"—",cls:"info",dot:cv("--blue")},
+    {lab:"Estimated total",val:fmt$0(est),cls:"gold",dot:cv("--gold")},
+    {lab:"Paid so far",val:fmt$0(paid),cls:"pos",dot:cv("--sage")},
+    {lab:"Remaining",val:fmt$0(remaining),cls:remaining>0?"neg":"pos",dot:cv("--clay")},
+  ];
+  document.getElementById("weddingKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
+
+  const t=document.getElementById("weddingTable");
+  if(!items.length){t.innerHTML=`<tbody><tr><td class="empty">Add your first wedding item.</td></tr></tbody>`;}
+  else{
+    const rows=items.map(i=>{
+      const rem=toNum(i.estimated)-toNum(i.paid);const done=toNum(i.estimated)>0&&rem<=0;
+      return `<tr class="${done?'paidrow':''}">
+        <td><input class="inp" value="${esc(i.item||'')}" placeholder="Item" style="padding:5px 8px;min-width:110px" oninput="editWedding('${i.id}','item',this.value)"></td>
+        <td><input class="inp" value="${esc(i.vendor||'')}" placeholder="Vendor" style="padding:5px 8px;min-width:100px" oninput="editWedding('${i.id}','vendor',this.value)"></td>
+        <td><input class="inp" type="date" value="${i.dueDate||''}" style="width:148px;padding:5px 8px" onchange="editWedding('${i.id}','dueDate',this.value)"></td>
+        <td class="r"><input class="actin" type="number" step="0.01" value="${i.estimated||''}" placeholder="0" onchange="editWedding('${i.id}','estimated',this.value)"></td>
+        <td class="r"><input class="actin" type="number" step="0.01" value="${i.paid||''}" placeholder="0" onchange="editWedding('${i.id}','paid',this.value)"></td>
+        <td class="r num ${rem>0?'neg':'pos'}">${fmt$(rem)}</td>
+        <td class="r"><button class="iconbtn del" onclick="delWeddingItem('${i.id}')">×</button></td></tr>`;
+    }).join("");
+    t.innerHTML=`<thead><tr><th>Item</th><th>Vendor</th><th>Due</th><th class="r">Estimated</th><th class="r">Paid</th><th class="r">Left</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;
+  }
+  drawWedding(items);
+}
+function drawWedding(items){
+  destroy("wed");
+  const data=items.filter(i=>toNum(i.estimated)>0);
+  const ctx=document.getElementById("weddingChart");
+  if(!data.length){if(charts.wed){charts.wed.destroy();delete charts.wed;}ctx.getContext("2d").clearRect(0,0,ctx.width,ctx.height);return;}
+  const pal=palette();
+  charts.wed=new Chart(ctx,{type:"doughnut",data:{labels:data.map(i=>i.item||"—"),datasets:[{data:data.map(i=>toNum(i.estimated)),backgroundColor:data.map((_,i)=>pal[i%pal.length]),borderColor:cv("--surface"),borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"right",labels:{color:cv("--text-dim"),boxWidth:10,boxHeight:10,padding:8,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt$(c.parsed)}`}}}}});
+}
+function editWedding(id,field,val){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it[field]=(field==="estimated"||field==="paid")?toNum(val):val;saveState();
+  if(field==="estimated"||field==="paid"){ // refresh totals + chart, keep focus
+    renderWedding();
+  }
+}
+function addWeddingItem(){S.wedding.items.push({id:uid(),item:"",vendor:"",dueDate:"",estimated:0,paid:0,notes:""});saveState();renderWedding();}
+function delWeddingItem(id){if(!confirm("Remove this wedding item?"))return;S.wedding.items=S.wedding.items.filter(x=>x.id!==id);saveState();renderWedding();}
+function setWeddingBudget(v){S.wedding.budget=toNum(v);saveState();renderWedding();}
+
 /* ============================== SETTINGS / DATA ============================== */
 function fillSettings(){document.getElementById("setStart").value=S.settings.startDate||"";document.getElementById("setMonths").value=S.settings.months||6;document.getElementById("setOpening").value=S.settings.openingBalance||0;renderCloudStatus();}
 function saveSettings(){S.settings.startDate=document.getElementById("setStart").value||S.settings.startDate;S.settings.months=Math.max(1,Math.min(24,parseInt(document.getElementById("setMonths").value||6,10)));S.settings.openingBalance=toNum(document.getElementById("setOpening").value);selMonth=null;saveState();renderAll();toast("Settings saved");}
@@ -1057,17 +1218,36 @@ function renderCloudStatus(){
   const el=document.getElementById("cloudStatus");if(!el)return;
   const ver=`<div class="muted" style="font-size:11.5px;margin-top:14px">Version ${APP_VERSION}${persistAvailable?"":" · ⚠︎ this browser isn't saving locally"}</div>`;
   if(!cloudEnabled){
-    el.innerHTML=`<div class="muted" style="font-size:13px;line-height:1.6">Cloud sync isn't set up yet. Create a free <a href="https://supabase.com" target="_blank">Supabase</a> project, run the one-time setup SQL, then paste your <b>Project URL</b> and <b>publishable key</b> (<code>sb_publishable_…</code>) into the two constants at the top of this file and re-deploy.</div>`+ver;
+    el.innerHTML=`
+      <div class="muted" style="font-size:13px;line-height:1.6;margin-bottom:12px">Paste your Supabase <b>Project URL</b> and <b>publishable key</b> (<code>sb_publishable_…</code>) to sync across devices — no file editing needed. Run the setup SQL in Supabase first.</div>
+      <div class="field" style="margin-bottom:10px"><label>Project URL</label><input id="cfgUrl" class="inp" value="${esc(cloudCfg.url||'')}" placeholder="https://xxxx.supabase.co"></div>
+      <div class="field" style="margin-bottom:12px"><label>Publishable key</label><input id="cfgKey" class="inp" placeholder="sb_publishable_…"></div>
+      <button class="btn sm" onclick="connectCloud()">Connect</button>`+ver;
     return;
   }
   let body;
   if(sbUser){
     const warn=(syncState==="offline"||lastCloudError)?`<div class="auth-msg" style="margin-top:8px">${esc(cloudErrorFriendly())}</div>`:"";
-    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill ${syncState==='offline'?'debt':'savings'}">${syncState==='offline'?'Offline':'Synced'}</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="settingsSignOut()" style="margin-left:auto">Sign out</button></div>${warn}`;
+    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill ${syncState==='offline'?'debt':'savings'}">${syncState==='offline'?'Offline':'Synced'}</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="settingsSignOut()">Sign out</button><button class="btn ghost sm" onclick="disconnectCloud()">Change keys</button></div>${warn}`;
   }else{
-    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill subs">Not signed in</span><span class="muted" style="font-size:13px">Sign in to load the shared ledger.</span><button class="btn sm" onclick="showAuth()" style="margin-left:auto">Sign in</button></div>`;
+    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill subs">Not signed in</span><span class="muted" style="font-size:13px">Sign in to load the shared ledger.</span><button class="btn sm" onclick="showAuth()">Sign in</button><button class="btn ghost sm" onclick="disconnectCloud()">Change keys</button></div>`;
   }
   el.innerHTML=body+ver;
+}
+async function connectCloud(){
+  const url=document.getElementById("cfgUrl").value.trim().replace(/\/+$/,"").replace(/\/rest\/v1$/,"");
+  const key=document.getElementById("cfgKey").value.trim();
+  if(!url||!key){toast("Enter both the URL and the publishable key");return;}
+  if(/^sb_secret_/.test(key)){toast("That's the secret key — paste the sb_publishable_ one");return;}
+  saveCloudCfg(url,key);cloudCfg={url,key};cloudEnabled=true;
+  toast("Connecting…");
+  await cloudInit();
+  if(sbUser){await afterSignedIn();}else{showAuth();}
+}
+function disconnectCloud(){
+  try{localStorage.removeItem(CFG_KEY);}catch(e){}
+  cloudCfg={url:cloudEnvUrl,key:cloudEnvKey};cloudEnabled=!!(cloudCfg.url&&cloudCfg.key);
+  sb=null;sbUser=null;lastCloudError="";setSync(cloudEnabled?"signin":"local");renderCloudStatus();
 }
 async function settingsSignOut(){await cloudSignOut();renderCloudStatus();toast("Signed out");}
 
@@ -1080,6 +1260,8 @@ function runMigrations(){
   S.history.values=S.history.values||{};
   S.history.budgets=S.history.budgets||{};
   if(!S.history.months)S.history.months=6;
+  S.wedding=S.wedding||{budget:0,items:[]};
+  if(!Array.isArray(S.wedding.items))S.wedding.items=[];
   if(!S.settings.theme)S.settings.theme="light";
   if(!S.migrations.endDate2027){S.bills.forEach(b=>{b.endDate=BILL_END;});S.migrations.endDate2027=true;}
   if(!S.migrations.noEndAnd2yr){
