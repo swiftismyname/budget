@@ -9,32 +9,34 @@
 <style>
   :root{
     --bg:#f7f5ef; --bg-grad1:rgba(111,179,156,.10); --bg-grad2:rgba(231,160,126,.10);
-    --surface:#ffffff; --surface2:#fbfaf6; --surface3:#f3f1ea;
-    --line:#ece8de; --line2:#ddd7c9;
-    --text:#3c424d; --text-dim:#79808b; --text-faint:#a7adb6;
+    --surface:#ffffff; --surface2:#fbfaf6; --surface3:#f0ede4;
+    --line:#e6e0d4; --line2:#d6cfc0;
+    --text:#3c424d; --text-dim:#79808b; --text-faint:#9aa0aa;
     --sage:#5fae93; --sage-soft:#dff0e9;
     --clay:#e09873; --clay-soft:#f8e4d8;
     --blue:#7d9bd6; --blue-soft:#e2e9f7;
     --gold:#dcae5f; --gold-soft:#f6ecd4;
     --lav:#aa9bd0; --lav-soft:#ece6f5;
     --rose:#d68f8f;
-    --shadow:0 6px 24px rgba(70,60,40,.07), 0 1px 3px rgba(70,60,40,.05);
-    --shadow-sm:0 2px 8px rgba(70,60,40,.06);
+    --accent:#4e9e82; --accent-lav:#8b79c6; --on-accent:#ffffff;   /* filled buttons/active tab */
+    --shadow:0 6px 24px rgba(70,60,40,.08), 0 1px 3px rgba(70,60,40,.06);
+    --shadow-sm:0 2px 8px rgba(70,60,40,.07);
     --r:18px; --r-sm:12px;
   }
   [data-theme="dark"]{
-    --bg:#1c1f27; --bg-grad1:rgba(95,174,147,.10); --bg-grad2:rgba(224,152,115,.08);
-    --surface:#262a33; --surface2:#2b303a; --surface3:#323744;
-    --line:#343a46; --line2:#444b59;
-    --text:#e7e9ee; --text-dim:#9aa1ad; --text-faint:#6c7480;
-    --sage:#71c2a5; --sage-soft:#23362f;
-    --clay:#e8a47f; --clay-soft:#3a2c24;
-    --blue:#92acdf; --blue-soft:#252c3a;
-    --gold:#e3b96e; --gold-soft:#352e1f;
-    --lav:#b9aae0; --lav-soft:#2c2839;
-    --rose:#dd9999;
-    --shadow:0 8px 28px rgba(0,0,0,.30), 0 1px 3px rgba(0,0,0,.25);
-    --shadow-sm:0 3px 12px rgba(0,0,0,.25);
+    --bg:#151820; --bg-grad1:rgba(95,174,147,.12); --bg-grad2:rgba(224,152,115,.09);
+    --surface:#242932; --surface2:#2c323d; --surface3:#39414f;
+    --line:#3c4353; --line2:#525b6d;
+    --text:#eef0f4; --text-dim:#aab1bd; --text-faint:#818996;
+    --sage:#74c6a9; --sage-soft:#213730;
+    --clay:#eaa683; --clay-soft:#3d2e25;
+    --blue:#97b0e2; --blue-soft:#232c3c;
+    --gold:#e6bd72; --gold-soft:#382f1f;
+    --lav:#bcaee2; --lav-soft:#2e2a3d;
+    --rose:#e09c9c;
+    --accent:#3f9d80; --accent-lav:#7a68bd; --on-accent:#ffffff;
+    --shadow:0 12px 34px rgba(0,0,0,.50), 0 2px 8px rgba(0,0,0,.40);
+    --shadow-sm:0 4px 14px rgba(0,0,0,.40);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
@@ -71,7 +73,7 @@
   nav.tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:24px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:var(--shadow-sm);width:fit-content;max-width:100%}
   nav.tabs button{background:transparent;border:0;border-radius:999px;color:var(--text-dim);font-family:'Plus Jakarta Sans';font-size:13px;font-weight:500;padding:8px 17px;cursor:pointer;transition:.18s}
   nav.tabs button:hover{color:var(--text)}
-  nav.tabs button.active{color:#fff;background:var(--sage);box-shadow:0 2px 8px rgba(95,174,147,.4)}
+  nav.tabs button.active{color:var(--on-accent);background:var(--accent);box-shadow:var(--shadow-sm)}
 
   /* Panels & cards */
   .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
@@ -108,6 +110,8 @@
   .pill.savings{background:var(--sage-soft);color:var(--sage)}
   .pill.income{background:var(--sage-soft);color:var(--sage)}
   .pill.subs{background:var(--gold-soft);color:var(--gold)}
+  .pill.sarah{background:var(--lav-soft);color:var(--lav)}
+  .seltick:checked{background:var(--lav);border-color:var(--lav)}
   .pill.other{background:var(--surface3);color:var(--text-dim)}
 
   /* Inputs */
@@ -118,8 +122,9 @@
   .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
 
   /* Buttons */
-  .btn{background:var(--sage);color:#fff;border:0;border-radius:999px;padding:10px 18px;font-family:'Plus Jakarta Sans';font-weight:600;font-size:13px;cursor:pointer;transition:.15s;box-shadow:0 2px 8px rgba(95,174,147,.35)}
-  .btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+  .btn{background:var(--accent);color:var(--on-accent);border:0;border-radius:999px;padding:10px 18px;font-family:'Plus Jakarta Sans';font-weight:600;font-size:13px;cursor:pointer;transition:.15s;box-shadow:var(--shadow-sm)}
+  .btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn.lav{background:var(--accent-lav);color:#fff}
   .btn.ghost{background:transparent;border:1px solid var(--line2);color:var(--text-dim);box-shadow:none}
   .btn.ghost:hover{color:var(--text);border-color:var(--sage)}
   .btn.danger{background:transparent;border:1px solid var(--rose);color:var(--rose);box-shadow:none}
@@ -150,6 +155,10 @@
   .hero-bar .seg.owed{background:var(--clay)}
   .hero-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--text-dim)}
   .hero-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  td.drag{cursor:grab;color:var(--text-faint);font-size:16px;text-align:center;user-select:none;width:24px}
+  td.drag:active{cursor:grabbing}
+  tr.dragging{background:var(--sage-soft);box-shadow:var(--shadow);opacity:.95}
+  tr.dragging td{border-color:transparent}
   .progress{height:9px;background:var(--surface3);border-radius:999px;overflow:hidden}
   .progress>div{height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));transition:width .4s;border-radius:999px}
   .paidrow{opacity:.55}
@@ -277,12 +286,14 @@
 <div id="auth">
   <div class="kick">Access from anywhere</div>
   <h1>The Ledger</h1>
-  <div class="authsub" id="authSub">Invite-only — sign in with the account your admin set up</div>
+  <div class="authsub" id="authSub">Sign in with your account</div>
   <div class="authcard">
     <div class="field"><label>Email</label><input id="authEmail" class="inp" type="email" autocomplete="username" placeholder="you@email.com"></div>
     <div class="field"><label>Password</label><input id="authPass" class="inp" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <div class="field hide" id="authConfirmWrap"><label>Confirm password</label><input id="authConfirm" class="inp" type="password" autocomplete="new-password" placeholder="••••••••"></div>
     <div class="auth-msg" id="authMsg"></div>
     <button class="btn" id="authBtn" onclick="doAuth()">Sign in</button>
+    <div class="auth-toggle" id="authToggle">Need an account? <button onclick="toggleAuthMode()">Create one</button></div>
   </div>
   <button class="auth-skip" onclick="skipAuth()">Use on this device only</button>
 </div>
@@ -309,6 +320,7 @@
   <nav class="tabs" id="tabs">
     <button data-tab="dashboard" class="active" onclick="go('dashboard')">Dashboard</button>
     <button data-tab="tracker" onclick="go('tracker')">This Month</button>
+    <button data-tab="paychecks" onclick="go('paychecks')">Paychecks</button>
     <button data-tab="forecast" onclick="go('forecast')">Forecast</button>
     <button data-tab="history" onclick="go('history')">History</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
@@ -337,7 +349,7 @@
   <!-- TRACKER -->
   <section id="view-tracker" class="hide">
     <div class="sec-h">
-      <div><h2 id="trackTitle">This Month</h2><div class="desc">Tick things off as you pay them, drop in the real amount, and watch what's left to spend.</div></div>
+      <div><h2 id="trackTitle">This Month</h2><div class="desc">Tick things off as you pay them, drop in the real amount, and drag rows by the ⠿ handle to prioritize — due dates stay put.</div></div>
     </div>
     <div id="spendHero"></div>
     <div class="track-head" id="trackKpis"></div>
@@ -346,8 +358,24 @@
         <div><h2 style="font-size:22px">This month's money</h2><div class="muted" id="trackCount" style="font-size:12px;margin-top:4px"></div></div>
         <button class="btn sm" onclick="addAdhoc()">+ Add expense</button>
       </div>
+      <div id="trackSelBar"></div>
       <div class="scrollx"><table id="trackTable"></table></div>
     </div>
+  </section>
+
+  <!-- PAYCHECKS -->
+  <section id="view-paychecks" class="hide">
+    <div class="sec-h">
+      <div><h2>Paychecks</h2><div class="desc">Your money split into pay periods — from each payday to the next — so you can see what a single check has to cover and what's left before the next one lands.</div></div>
+    </div>
+    <div id="payHero"></div>
+    <div class="grid kpis" id="payKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
+    <div class="panel" style="margin-bottom:16px">
+      <div class="chart-h">Left over each pay period</div>
+      <div class="chart-s">Green means the check covered its bills with room to spare</div>
+      <div class="chart-box"><canvas id="payChart"></canvas></div>
+    </div>
+    <div class="panel scrollx"><table id="payTable"></table></div>
   </section>
 
   <!-- FORECAST -->
@@ -478,10 +506,11 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.6.0";
 const KEY="ledger_state_v2";
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
+let tsel=new Set(), tselAmt={}, tselable=[];   // tracker multi-select (transient)
 
 // cloud runtime
 const CFG_KEY="ledger_cloud_cfg";
@@ -576,14 +605,24 @@ async function cloudPush(){
     lastCloudError="";setSync("synced");return true;
   }catch(e){lastCloudError=e.message||String(e);console.error("push failed",e);setSync("offline");return false;}
 }
-async function cloudSignIn(email,password){
+async function cloudSignIn(email,password,mode){
   if(!sb)return{ok:false,msg:"Cloud isn't configured"};
   try{
+    if(mode==="signup"){
+      const {data,error}=await sb.auth.signUp({email,password});
+      if(error)throw error;
+      if(!data.session)return{ok:false,msg:"Account created — check your email to confirm, then sign in.",created:true};
+      sbUser=data.user;return{ok:true};
+    }
     const {data,error}=await sb.auth.signInWithPassword({email,password});
     if(error)throw error;
     if(!data.session)return{ok:false,msg:"Confirm your email first, then sign in."};
     sbUser=data.user;return{ok:true};
-  }catch(e){return{ok:false,msg:e.message||"Sign-in failed"};}
+  }catch(e){
+    let m=e.message||"Sign-in failed";
+    if(/signups? not allowed|disabled/i.test(m)) m="Account creation is turned off in Supabase. Enable it under Authentication → Providers → Email, or ask the admin.";
+    return{ok:false,msg:m};
+  }
 }
 async function cloudSignOut(){try{await sb.auth.signOut();}catch(e){}sbUser=null;setSync(cloudEnabled?"signin":"local");}
 
@@ -704,6 +743,7 @@ function drillToMonth(key){selMonth=key;const ms=document.getElementById("monthS
 function renderAll(){const events=buildForecast();const keys=monthKeys(events);populateMonthSelect(keys);
   if(activeTab==="dashboard")renderDashboard(events,keys);
   if(activeTab==="tracker")renderTracker(events);
+  if(activeTab==="paychecks")renderPaychecks(events);
   if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);}
   if(activeTab==="history")renderHistory();
   if(activeTab==="wedding")renderWedding();
@@ -840,28 +880,29 @@ function renderTracker(events){
   const opening=monthOpening(events,selMonth,keys);
   const incomeTotal=incomes.reduce((s,e)=>s+e.amount,0);
 
-  // effective spend per item; paid vs unpaid
-  let paidCount=0,totalCount=0,spent=0,stillToPay=0,obligations=0;
+  // prune stale selections; reset per-render maps
+  tselAmt={}; tselable=[];
+  let paidCount=0,totalCount=0,spent=0,stillToPay=0,obligations=0,paidByMe=0,paidBySarah=0;
   expenses.forEach(e=>{
     totalCount++;
-    const a=getActual(e.occId)||{paid:false,actual:null};
+    const a=getActual(e.occId)||{paid:false,actual:null,by:null};
     const eff=(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;
-    obligations+=eff;
-    if(a.paid){paidCount++;spent+=eff;}else stillToPay+=eff;
+    obligations+=eff; tselAmt[e.occId]=eff; tselable.push(e.occId);
+    if(a.paid){paidCount++;spent+=eff;if(a.by==="sarah")paidBySarah+=eff;else paidByMe+=eff;}else stillToPay+=eff;
   });
   adhoc.forEach(x=>{
     totalCount++;
-    const amt=toNum(x.amount);obligations+=amt;
-    if(x.paid){paidCount++;spent+=amt;}else stillToPay+=amt;
+    const amt=toNum(x.amount);obligations+=amt; tselAmt[x.id]=amt; tselable.push(x.id);
+    if(x.paid){paidCount++;spent+=amt;if(x.by==="sarah")paidBySarah+=amt;else paidByMe+=amt;}else stillToPay+=amt;
   });
+  tsel.forEach(id=>{if(!tselable.includes(id))tsel.delete(id);});
 
-  const available=opening+incomeTotal;          // cash you have to work with this month
-  const leftToSpend=available-obligations;       // cushion after every bill this month
+  const available=opening+incomeTotal;
+  const leftToSpend=available-obligations;
   const cushionCls=leftToSpend<0?"neg":(leftToSpend<200?"gold":"pos");
-
-  // hero
   const spentPctOfAvail=available>0?Math.max(0,Math.min(100,Math.round(spent/available*100))):0;
   const owedPct=available>0?Math.max(0,Math.min(100,Math.round(stillToPay/available*100))):0;
+  const sarahLeg=paidBySarah>0?`<span><i style="background:var(--lav)"></i>Sarah ${fmt$0(paidBySarah)}</span>`:"";
   document.getElementById("spendHero").innerHTML=`
     <div class="hero ${leftToSpend<0?'hero-warn':''}">
       <div class="hero-main">
@@ -871,7 +912,7 @@ function renderTracker(events){
       </div>
       <div class="hero-bar-wrap">
         <div class="hero-bar"><span class="seg paid" style="width:${spentPctOfAvail}%"></span><span class="seg owed" style="width:${owedPct}%"></span></div>
-        <div class="hero-legend"><span><i style="background:var(--sage)"></i>Paid ${fmt$0(spent)}</span><span><i style="background:var(--clay)"></i>Still owed ${fmt$0(stillToPay)}</span><span><i style="background:var(--surface3)"></i>Free ${fmt$0(Math.max(0,leftToSpend))}</span></div>
+        <div class="hero-legend"><span><i style="background:var(--sage)"></i>You paid ${fmt$0(paidByMe)}</span>${sarahLeg}<span><i style="background:var(--clay)"></i>Still owed ${fmt$0(stillToPay)}</span><span><i style="background:var(--surface3)"></i>Free ${fmt$0(Math.max(0,leftToSpend))}</span></div>
       </div>
     </div>`;
 
@@ -885,18 +926,21 @@ function renderTracker(events){
   const pct=totalCount?Math.round(paidCount/totalCount*100):0;
   document.getElementById("trackCount").innerHTML=`${paidCount} of ${totalCount} paid · ${pct}%<div class="progress" style="width:150px;display:inline-block;vertical-align:middle;margin-left:10px"><div style="width:${pct}%"></div></div>`;
 
-  // unified, date-sorted list
+  // rows — custom priority order first, then date
   const rows=[];
-  incomes.forEach(e=>rows.push({sort:e.date,html:`<tr><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
+  const H=`<td class="drag" title="Drag to reorder">⠿</td>`;
+  const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
+  const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
+  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,sel:false,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
   expenses.forEach(e=>{
-    const a=getActual(e.occId)||{paid:false,actual:null};const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
-    rows.push({sort:e.date,html:`<tr class="${a.paid?'paidrow':''}"><td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td></td></tr>`});
+    const a=getActual(e.occId)||{paid:false,actual:null,by:null};const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
+    rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td>${fmtDate(e.date)}</td><td>${esc(e.name)}${byChip(a.by)}</td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
-    rows.push({sort:d,html:`<tr class="${x.paid?'paidrow':''}">
+    rows.push({id:x.id,sort:d,html:`<tr data-rowid="${x.id}" class="${x.paid?'paidrow':''}">${selCell(x.id)}${H}
       <td><input class="inp" type="date" value="${x.date||''}" style="width:148px;padding:5px 8px" onchange="editAdhoc('${x.id}','date',this.value)"></td>
-      <td><input class="inp" value="${esc(x.name||'')}" placeholder="What was it?" style="padding:5px 8px;min-width:120px" oninput="editAdhoc('${x.id}','name',this.value)"></td>
+      <td><input class="inp" value="${esc(x.name||'')}" placeholder="What was it?" style="padding:5px 8px;min-width:120px" oninput="editAdhoc('${x.id}','name',this.value)">${byChip(x.by)}</td>
       <td><span class="pill other" style="margin-bottom:4px;display:inline-block">Unplanned</span><input class="inp" value="${esc(x.category||'')}" placeholder="category" style="width:120px;padding:4px 8px" oninput="editAdhoc('${x.id}','category',this.value)"></td>
       <td class="r muted">—</td>
       <td class="r"><input class="actin" type="number" step="0.01" placeholder="0" value="${x.amount||''}" onchange="editAdhoc('${x.id}','amount',this.value)"></td>
@@ -904,16 +948,141 @@ function renderTracker(events){
       <td class="r"><input class="chk" type="checkbox" ${x.paid?'checked':''} onchange="editAdhoc('${x.id}','paid',this.checked)"></td>
       <td class="r"><button class="iconbtn del" onclick="delAdhoc('${x.id}')">×</button></td></tr>`});
   });
-  rows.sort((a,b)=>a.sort-b.sort);
+  const ord=S.order[selMonth]||[];
+  const oi=id=>{const i=ord.indexOf(id);return i===-1?1e9:i;};
+  rows.sort((a,b)=>{const d=oi(a.id)-oi(b.id);return d!==0?d:(a.sort-b.sort);});
   const tbl=document.getElementById("trackTable");
   if(!rows.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing for ${monthLabel(selMonth)} yet — add an expense to start.</td></tr></tbody>`;}
-  else tbl.innerHTML=`<thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
+  else{
+    const allSel=tselable.length&&tselable.every(id=>tsel.has(id));
+    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
+    makeSortable(tbl.querySelector("tbody"),".drag",newOrder=>{S.order[selMonth]=newOrder;saveState();});
+  }
+  renderTrackSelBar();
+}
+function renderTrackSelBar(){
+  const bar=document.getElementById("trackSelBar");if(!bar)return;
+  if(!tsel.size){bar.innerHTML="";return;}
+  let total=0;tsel.forEach(id=>total+=(tselAmt[id]||0));
+  bar.innerHTML=`<div class="bulk" style="margin-bottom:14px">
+    <span class="count">${tsel.size} selected · ${fmt$(total)}</span>
+    <span class="sep"></span>
+    <button class="btn sm" onclick="markSelected('me')">Mark paid</button>
+    <button class="btn sm lav" onclick="markSelected('sarah')">Given to Sarah</button>
+    <button class="iconbtn" onclick="markSelected(null)">Unmark</button>
+    <button class="iconbtn" onclick="tselClear()" style="margin-left:auto">Clear</button>
+  </div>`;
+}
+function tselToggle(id,c){if(c)tsel.add(id);else tsel.delete(id);renderTrackSelBar();
+  // reflect select-all header without full rebuild
+  const allSel=tselable.length&&tselable.every(x=>tsel.has(x));const h=document.querySelector("#trackTable thead .chk");if(h)h.checked=allSel;}
+function tselAll(c){if(c)tselable.forEach(id=>tsel.add(id));else tsel.clear();renderTracker(buildForecast());}
+function tselClear(){tsel.clear();renderTracker(buildForecast());}
+function markSelected(by){
+  const paid=by!==null;
+  tsel.forEach(id=>{
+    const ad=(S.adhoc[selMonth]||[]).find(x=>x.id===id);
+    if(ad){ad.paid=paid;ad.by=paid?by:null;}
+    else{setActual(id,{paid,by:paid?by:null});}
+  });
+  const n=tsel.size;tsel.clear();saveState();renderTracker(buildForecast());
+  toast(by==="sarah"?`Marked ${n} as given to Sarah`:by==="me"?`Marked ${n} paid`:`Unmarked ${n}`);
+}
+function makeSortable(tbody,handleSel,onReorder){
+  let dragEl=null;
+  tbody.querySelectorAll("[data-rowid]").forEach(row=>{
+    const handle=row.querySelector(handleSel);if(!handle)return;
+    handle.style.touchAction="none";
+    handle.addEventListener("pointerdown",e=>{
+      e.preventDefault();dragEl=row;row.classList.add("dragging");
+      try{handle.setPointerCapture(e.pointerId);}catch(_){}
+      const move=ev=>{
+        const others=[...tbody.querySelectorAll("[data-rowid]:not(.dragging)")];
+        const after=others.find(r=>{const rc=r.getBoundingClientRect();return ev.clientY<rc.top+rc.height/2;});
+        if(after)tbody.insertBefore(dragEl,after);else tbody.appendChild(dragEl);
+      };
+      const up=()=>{
+        row.classList.remove("dragging");
+        document.removeEventListener("pointermove",move);
+        document.removeEventListener("pointerup",up);
+        const newOrder=[...tbody.querySelectorAll("[data-rowid]")].map(r=>r.dataset.rowid);
+        dragEl=null;onReorder(newOrder);
+      };
+      document.addEventListener("pointermove",move);
+      document.addEventListener("pointerup",up);
+    });
+  });
 }
 function onActual(occId,v){setActual(occId,{actual:v});renderTracker(buildForecast());}
-function onPaid(occId,c){setActual(occId,{paid:c});renderTracker(buildForecast());}
+function onPaid(occId,c){setActual(occId,c?{paid:true}:{paid:false,by:null});renderTracker(buildForecast());}
 function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:"",paid:false});saveState();renderTracker(buildForecast());}
 function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date"||field==="paid")renderTracker(buildForecast());}
 function delAdhoc(id){S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);saveState();renderTracker(buildForecast());}
+
+/* ============================== PAYCHECKS ============================== */
+function payPeriods(events){
+  const dates=[...new Set(events.filter(e=>e.type==="Income").map(e=>ymd(e.date)))].sort();
+  const periods=[];
+  for(let i=0;i<dates.length;i++){
+    const start=parseDate(dates[i]);
+    const end=i+1<dates.length?parseDate(dates[i+1]):null;   // exclusive next payday
+    const evs=events.filter(e=>e.date>=start && (end?e.date<end:true));
+    const income=evs.filter(e=>e.type==="Income").reduce((s,e)=>s+e.amount,0);
+    const bills=evs.filter(e=>e.type==="Expense").reduce((s,e)=>s+e.amount,0);
+    const endBal=evs.length?evs[evs.length-1].runningBalance:null;
+    const low=evs.reduce((m,e)=>Math.min(m,e.runningBalance),Infinity);
+    periods.push({start,end,income,bills,net:income-bills,endBal,low:low===Infinity?endBal:low,
+      billCount:evs.filter(e=>e.type==="Expense").length});
+  }
+  return periods;
+}
+function periodLabel(p){const endD=p.end?addDays(p.end,-1):null;return endD?`${p.start.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${endD.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`:`${p.start.toLocaleDateString("en-US",{month:"short",day:"numeric"})} →`;}
+function renderPaychecks(events){
+  events=events||buildForecast();
+  const periods=payPeriods(events);
+  if(!periods.length){document.getElementById("payHero").innerHTML="";document.getElementById("payKpis").innerHTML="";document.getElementById("payTable").innerHTML=`<tbody><tr><td class="empty">Add income to see your pay periods.</td></tr></tbody>`;destroy("pay");return;}
+  const today=new Date();today.setHours(0,0,0,0);
+  let cur=periods.find(p=>today>=p.start && (p.end?today<p.end:true))||periods[0];
+  const netCls=cur.net<0?"neg":(cur.net<100?"gold":"pos");
+
+  document.getElementById("payHero").innerHTML=`
+    <div class="hero ${cur.net<0?'hero-warn':''}">
+      <div class="hero-main">
+        <div class="hero-lab">Left this pay period · ${periodLabel(cur)}</div>
+        <div class="hero-val num ${netCls}">${fmt$0(cur.net)}</div>
+        <div class="hero-sub">${fmt$0(cur.income)} paycheck − ${fmt$0(cur.bills)} in bills${cur.endBal!=null?` · ${fmt$0(cur.endBal)} on hand before the next check`:""}</div>
+      </div>
+    </div>`;
+
+  const cards=[
+    {lab:"This paycheck",val:fmt$0(cur.income),cls:"pos",dot:cv("--sage")},
+    {lab:"Bills this period",val:fmt$0(cur.bills),cls:"neg",dot:cv("--clay")},
+    {lab:"Left this period",val:fmt$0(cur.net),cls:netCls,dot:cv("--gold")},
+    {lab:"Before next check",val:cur.endBal!=null?fmt$0(cur.endBal):"—",cls:cur.endBal<0?"neg":"info",dot:cv("--blue")},
+  ];
+  document.getElementById("payKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
+
+  const t=document.getElementById("payTable");
+  const rows=periods.map(p=>{const isCur=p===cur;return `<tr style="${isCur?'background:var(--sage-soft)':''}">
+    <td>${periodLabel(p)}${isCur?' <span class="pill savings" style="margin-left:6px">now</span>':''}</td>
+    <td class="r num pos">${fmt$(p.income)}</td>
+    <td class="r num">${fmt$(p.bills)}</td>
+    <td class="r num ${p.net<0?'neg':'pos'}">${p.net<0?'−':''}${fmt$(Math.abs(p.net))}</td>
+    <td class="r num ${p.low<0?'neg':''}">${p.low!=null?fmt$(p.low):'—'}</td>
+    <td class="r num ${p.endBal<0?'neg':''}">${p.endBal!=null?fmt$(p.endBal):'—'}</td>
+  </tr>`;}).join("");
+  t.innerHTML=`<thead><tr><th>Pay period</th><th class="r">Paycheck</th><th class="r">Bills</th><th class="r">Left over</th><th class="r">Low point</th><th class="r">Before next</th></tr></thead><tbody>${rows}</tbody>`;
+
+  drawPay(periods,cur);
+}
+function drawPay(periods,cur){
+  destroy("pay");
+  charts.pay=new Chart(document.getElementById("payChart"),{type:"bar",
+    data:{labels:periods.map(p=>p.start.toLocaleDateString("en-US",{month:"short",day:"numeric"})),
+      datasets:[{data:periods.map(p=>p.net),backgroundColor:periods.map(p=>p===cur?cv("--gold"):(p.net<0?cv("--clay"):cv("--sage"))),borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:c=>periodLabel(periods[c[0].dataIndex]),label:c=>" Left over: "+fmt$(c.parsed.y)}}},
+      scales:{x:{ticks:{color:cv("--text-dim"),maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:cv("--text-dim"),callback:v=>"$"+(v/1000).toFixed(1)+"k"},grid:{color:cv("--line")}}}}});
+}
 
 /* ============================== BILLS + BULK ============================== */
 function grpClass(g){g=String(g||"").toLowerCase();return g==="debt"?"debt":g==="savings"?"savings":g==="income"?"income":g==="subscriptions"?"subs":g==="other"?"other":"bills";}
@@ -1194,14 +1363,33 @@ async function forgotPin(){
 }
 
 /* ============================== CLOUD AUTH UI ============================== */
-function showAuth(){const a=document.getElementById("auth");a.style.display="flex";document.getElementById("app").style.visibility="hidden";document.getElementById("lock").style.display="none";document.getElementById("authMsg").textContent="";setSync("signin");}
+let authMode="signin";
+function setAuthMode(m){
+  authMode=m;
+  document.getElementById("authBtn").textContent=m==="signup"?"Create account":"Sign in";
+  document.getElementById("authSub").textContent=m==="signup"?"Create your login and password":"Sign in with your account";
+  document.getElementById("authConfirmWrap").classList.toggle("hide",m!=="signup");
+  document.getElementById("authToggle").innerHTML=m==="signup"?`Already have an account? <button onclick="toggleAuthMode()">Sign in</button>`:`Need an account? <button onclick="toggleAuthMode()">Create one</button>`;
+  document.getElementById("authPass").setAttribute("autocomplete",m==="signup"?"new-password":"current-password");
+  document.getElementById("authMsg").textContent="";
+}
+function toggleAuthMode(){setAuthMode(authMode==="signin"?"signup":"signin");}
+function showAuth(){const a=document.getElementById("auth");a.style.display="flex";document.getElementById("app").style.visibility="hidden";document.getElementById("lock").style.display="none";setAuthMode("signin");setSync("signin");}
 async function doAuth(){
   const email=document.getElementById("authEmail").value.trim();const pass=document.getElementById("authPass").value;const msg=document.getElementById("authMsg");
   if(!email||!pass){msg.textContent="Enter your email and password";return;}
+  if(authMode==="signup"){
+    if(pass.length<6){msg.textContent="Use a password of at least 6 characters";return;}
+    if(pass!==document.getElementById("authConfirm").value){msg.textContent="Passwords don't match";return;}
+  }
   const btn=document.getElementById("authBtn");const lbl=btn.textContent;btn.textContent="…";btn.disabled=true;
-  const res=await cloudSignIn(email,pass);
+  const res=await cloudSignIn(email,pass,authMode);
   btn.disabled=false;btn.textContent=lbl;
-  if(!res.ok){msg.textContent=res.msg;return;}
+  if(!res.ok){
+    msg.textContent=res.msg;
+    if(res.created)setAuthMode("signin");   // account made; drop them into sign-in
+    return;
+  }
   msg.textContent="";await afterSignedIn();
 }
 function skipAuth(){document.getElementById("auth").style.display="none";proceedLocal();}
@@ -1262,6 +1450,7 @@ function runMigrations(){
   if(!S.history.months)S.history.months=6;
   S.wedding=S.wedding||{budget:0,items:[]};
   if(!Array.isArray(S.wedding.items))S.wedding.items=[];
+  S.order=S.order||{};
   if(!S.settings.theme)S.settings.theme="light";
   if(!S.migrations.endDate2027){S.bills.forEach(b=>{b.endDate=BILL_END;});S.migrations.endDate2027=true;}
   if(!S.migrations.noEndAnd2yr){
