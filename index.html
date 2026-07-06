@@ -1,5 +1,11 @@
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#f7f5ef" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#151820" media="(prefers-color-scheme: dark)" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="The Ledger" />
 <title>The Ledger — Budget & Forecast</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -247,11 +253,112 @@
     .track-head{grid-template-columns:repeat(2,1fr)}
     .brand h1{font-size:34px}
   }
-  @media(max-width:560px){
-    .kpis{grid-template-columns:1fr 1fr}
-    .form-grid{grid-template-columns:1fr}
-    .scrollx{overflow-x:auto}
+
+  /* ===================== MOBILE (app-like) ===================== */
+  .bottomnav{display:none}
+  @media(max-width:760px){
+    html{-webkit-text-size-adjust:100%}
+    body{overscroll-behavior-y:contain}
+    .wrap{padding:14px 14px calc(84px + env(safe-area-inset-bottom));max-width:100%}
+
+    /* hide the top pill nav; use the bottom bar */
+    nav.tabs{display:none}
+
+    /* compact masthead */
+    header.mast{margin-bottom:14px;padding-top:env(safe-area-inset-top);align-items:center}
+    .brand .kick{font-size:10px;letter-spacing:.16em}
+    .brand h1{font-size:26px}
+    .brand .sub{display:none}
+    .mast-right{gap:8px}
+    .monthsel{padding:6px 8px 6px 12px}
+    .monthsel label{display:none}
+    .syncchip span:not(.sync-ico){display:none}
+    .syncchip{padding:9px 11px}
+    .themebtn{width:40px;height:40px}
+
+    /* sections & headings */
+    .panel{padding:15px;border-radius:15px}
+    .sec-h h2{font-size:23px}
+    .sec-h{margin-bottom:12px}
+    .chart-box{height:230px}
+    .chart-box.tall{height:250px}
+    .hero{padding:16px;gap:14px}
+    .hero-val{font-size:30px}
+
+    /* bigger touch targets */
+    .btn{min-height:44px;padding:11px 18px}
+    .btn.sm{min-height:38px}
+    .iconbtn{min-height:34px;padding:7px 12px}
+    .chk{width:24px;height:24px}
+    .chk:checked::after{left:7px;top:3px}
+
+    /* inputs: 16px prevents iOS zoom-on-focus */
+    .inp,select.inp,textarea.inp,.actin,input,select,textarea{font-size:16px}
+    .actin{width:84px;padding:8px 9px}
+
+    /* tables: momentum scroll + a little breathing room */
+    .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .scrollx::-webkit-scrollbar{display:none}
+    thead th{font-size:10px;padding:8px 8px}
+    tbody td{padding:11px 8px}
+
+    /* This Month: drop the least-critical columns so it fits the screen
+       (keep Date, Item, Budget/amount, Actual, Paid; hide Category & +/−) */
+    #trackTable th:nth-child(5),#trackTable td:nth-child(5),   /* Category */
+    #trackTable th:nth-child(8),#trackTable td:nth-child(8){display:none} /* +/- */
+    #trackTable td:nth-child(4){font-size:12.5px}
+
+    /* Forecast/History wide tables keep horizontal scroll (fine) */
+
+    /* KPI text a touch smaller */
+    .kpi .val{font-size:21px}
+    .kpis{grid-template-columns:repeat(2,1fr)!important}
+
+    /* modals become bottom sheets */
+    .modal-bg{align-items:flex-end;padding:0}
+    .modal{max-width:100%;border-radius:22px 22px 0 0;max-height:90vh;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:sheetup .28s cubic-bezier(.2,.8,.2,1)}
+    .form-grid{grid-template-columns:1fr;gap:12px}
+
+    /* selection / bulk bars wrap nicely and stay reachable */
+    .bulk{gap:8px;padding:11px 12px}
+    .bulk .count{width:100%}
   }
+  @media(max-width:560px){
+    .kpis{grid-template-columns:1fr 1fr!important}
+    .track-head{grid-template-columns:1fr 1fr}
+    .charts{grid-template-columns:1fr!important}
+  }
+
+  /* Bottom tab bar */
+  .bottomnav{
+    position:fixed;left:0;right:0;bottom:0;z-index:35;
+    display:none;justify-content:space-around;align-items:stretch;
+    background:var(--surface);border-top:1px solid var(--line);
+    padding:6px 4px calc(4px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 20px rgba(0,0,0,.08);
+  }
+  [data-theme="dark"] .bottomnav{box-shadow:0 -6px 22px rgba(0,0,0,.5)}
+  @media(max-width:760px){.bottomnav{display:flex}}
+  .bottomnav button{
+    background:none;border:0;cursor:pointer;flex:1;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:7px 2px;color:var(--text-faint);font-family:'Plus Jakarta Sans';font-size:10.5px;font-weight:600;
+    border-radius:12px;transition:.15s;-webkit-tap-highlight-color:transparent;
+  }
+  .bottomnav button .bn-ic{font-size:18px;line-height:1}
+  .bottomnav button.active{color:var(--accent)}
+  .bottomnav button.active .bn-ic{transform:translateY(-1px)}
+
+  /* Bottom sheet ("More") */
+  .sheet-bg{position:fixed;inset:0;z-index:45;background:rgba(30,25,18,.4);backdrop-filter:blur(3px);display:none;align-items:flex-end}
+  .sheet-bg.open{display:flex}
+  .sheet{width:100%;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 16px calc(20px + env(safe-area-inset-bottom));box-shadow:var(--shadow);animation:sheetup .28s cubic-bezier(.2,.8,.2,1)}
+  .sheet-grab{width:40px;height:4px;border-radius:999px;background:var(--line2);margin:6px auto 12px}
+  .sheet-title{font-family:'Fraunces',serif;font-size:20px;font-weight:500;margin:0 4px 12px}
+  .sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .sheet-grid button{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:16px;font-family:'Plus Jakarta Sans';font-size:14px;font-weight:600;color:var(--text);cursor:pointer;text-align:left;min-height:52px;-webkit-tap-highlight-color:transparent}
+  .sheet-grid button:active{background:var(--surface3)}
+  @keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
 </style>
 
 <div id="loader"><div class="ring"></div><div class="msg" id="loadmsg">Opening the ledger…</div></div>
@@ -328,6 +435,31 @@
     <button data-tab="wedding" onclick="go('wedding')">Wedding</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
   </nav>
+
+  <!-- Mobile bottom tab bar -->
+  <nav class="bottomnav" id="bottomnav">
+    <button data-tab="dashboard" class="active" onclick="go('dashboard')"><span class="bn-ic">◇</span><span>Home</span></button>
+    <button data-tab="tracker" onclick="go('tracker')"><span class="bn-ic">✓</span><span>Month</span></button>
+    <button data-tab="paychecks" onclick="go('paychecks')"><span class="bn-ic">❙❙</span><span>Pay</span></button>
+    <button data-tab="wedding" onclick="go('wedding')"><span class="bn-ic">♥</span><span>Wedding</span></button>
+    <button onclick="openMore()"><span class="bn-ic">⋯</span><span>More</span></button>
+  </nav>
+
+  <!-- Mobile "More" sheet -->
+  <div id="moreSheet" class="sheet-bg" onclick="if(event.target===this)closeMore()">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <div class="sheet-title">More</div>
+      <div class="sheet-grid">
+        <button onclick="goMore('forecast')"><span>Forecast</span></button>
+        <button onclick="goMore('history')"><span>History</span></button>
+        <button onclick="goMore('bills')"><span>Bills</span></button>
+        <button onclick="goMore('income')"><span>Income</span></button>
+        <button onclick="goMore('dashboard')"><span>Dashboard</span></button>
+        <button onclick="goMore('settings')"><span>Settings</span></button>
+      </div>
+    </div>
+  </div>
 
   <!-- DASHBOARD -->
   <section id="view-dashboard">
@@ -506,7 +638,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 const KEY="ledger_state_v2";
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
@@ -736,7 +868,17 @@ function applyTheme(t){document.documentElement.setAttribute("data-theme",t);doc
 function toggleTheme(){const t=(S.settings.theme==="dark")?"light":"dark";S.settings.theme=t;applyTheme(t);saveState();renderAll();}
 
 /* ============================== SHELL ============================== */
-function go(tab){activeTab=tab;document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));document.querySelectorAll("section[id^=view-]").forEach(s=>s.classList.add("hide"));document.getElementById("view-"+tab).classList.remove("hide");renderAll();}
+function go(tab){activeTab=tab;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  document.querySelectorAll(".bottomnav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  document.querySelectorAll("section[id^=view-]").forEach(s=>s.classList.add("hide"));
+  document.getElementById("view-"+tab).classList.remove("hide");
+  window.scrollTo(0,0);
+  renderAll();
+}
+function openMore(){document.getElementById("moreSheet").classList.add("open");}
+function closeMore(){document.getElementById("moreSheet").classList.remove("open");}
+function goMore(tab){closeMore();go(tab);}
 function populateMonthSelect(keys){const sel=document.getElementById("monthSelect");sel.innerHTML=keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join("");if(!selMonth||!keys.includes(selMonth))selMonth=keys[0];sel.value=selMonth;}
 function onMonthChange(){selMonth=document.getElementById("monthSelect").value;renderAll();}
 function drillToMonth(key){selMonth=key;const ms=document.getElementById("monthSelect");if(ms)ms.value=key;go("tracker");}
@@ -1500,6 +1642,11 @@ async function denyCloud(){
 (async function(){
   baseChartOpts();
   detectPersist();
+  // bring up the numeric keypad for money fields on mobile
+  try{
+    const setIM=n=>{if(n.nodeType!==1)return;if(n.matches&&n.matches('input[type=number]'))n.setAttribute('inputmode','decimal');n.querySelectorAll&&n.querySelectorAll('input[type=number]').forEach(x=>x.setAttribute('inputmode','decimal'));};
+    new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)setIM(n);}).observe(document.body,{childList:true,subtree:true});
+  }catch(e){}
   const vt=document.getElementById("verTag");if(vt)vt.textContent="v"+APP_VERSION;
   setLoad("Reading your saved data…");
   S=await loadState();
