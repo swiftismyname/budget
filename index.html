@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <style>
   :root{
@@ -68,6 +69,18 @@
   .brand h1{font-family:'Fraunces',serif;font-weight:500;font-size:42px;line-height:1;margin:4px 0 0;letter-spacing:-.01em}
   .brand .sub{color:var(--text-dim);font-size:13.5px;font-weight:300;margin-top:5px}
   .vertag{display:inline-block;font-size:10.5px;font-weight:600;color:var(--text-faint);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:4px;font-family:'Spline Sans Mono',monospace;vertical-align:middle}
+  .modelabel{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:middle}
+  .modelabel.personal{background:var(--blue-soft);color:var(--blue)}
+  .modelabel.shared{background:var(--lav-soft);color:var(--lav)}
+  .settle{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--lav-soft);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:13.5px}
+  .settle-tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--lav);font-weight:700;margin-right:6px}
+  .settle-r{display:flex;gap:16px;color:var(--text-dim);font-size:12.5px}
+  .settle-r b{color:var(--text)}
+  .rec-link{font-weight:600;cursor:pointer;border-bottom:1px dotted var(--line2)}
+  .rec-link:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  .due-sub{font-size:11px;color:var(--text-faint);margin-top:2px}
+  .due-sub.due-late{color:var(--clay)}
+  input.paydate{width:140px;padding:6px 8px;font-family:'Spline Sans Mono',monospace;font-size:12.5px}
   .mast-right{display:flex;align-items:center;gap:10px}
   .monthsel{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 16px;box-shadow:var(--shadow-sm)}
   .monthsel label{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);font-weight:600}
@@ -411,7 +424,7 @@
     <div class="brand">
       <div class="kick">Your money, month by month</div>
       <h1>The Ledger</h1>
-      <div class="sub">A calm look at this month and the months ahead. <span id="verTag" class="vertag"></span></div>
+      <div class="sub">A calm look at this month and the months ahead. <span id="verTag" class="vertag"></span><span id="modeTag"></span></div>
     </div>
     <div class="mast-right">
       <button class="syncchip" id="syncChip" onclick="go('settings')" title="Sync status"><span class="sync-ico local">•</span>On this device</button>
@@ -433,6 +446,7 @@
     <button data-tab="bills" onclick="go('bills')">Bills</button>
     <button data-tab="income" onclick="go('income')">Income</button>
     <button data-tab="wedding" onclick="go('wedding')">Wedding</button>
+    <button data-tab="sarah" onclick="go('sarah')">Sarah</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
   </nav>
 
@@ -455,6 +469,7 @@
         <button onclick="goMore('history')"><span>History</span></button>
         <button onclick="goMore('bills')"><span>Bills</span></button>
         <button onclick="goMore('income')"><span>Income</span></button>
+        <button onclick="goMore('sarah')"><span>Sarah</span></button>
         <button onclick="goMore('dashboard')"><span>Dashboard</span></button>
         <button onclick="goMore('settings')"><span>Settings</span></button>
       </div>
@@ -485,6 +500,7 @@
     </div>
     <div id="spendHero"></div>
     <div class="track-head" id="trackKpis"></div>
+    <div id="settleCard"></div>
     <div class="panel">
       <div class="sec-h" style="margin-bottom:10px;align-items:center">
         <div><h2 style="font-size:22px">This month's money</h2><div class="muted" id="trackCount" style="font-size:12px;margin-top:4px"></div></div>
@@ -579,19 +595,33 @@
   <!-- WEDDING -->
   <section id="view-wedding" class="hide">
     <div class="sec-h">
-      <div><h2>Wedding</h2><div class="desc">A separate budget for the big day — tracked in the same app and synced with everything else. Set a target, log estimates and deposits, and see what's left.</div></div>
+      <div><h2>Wedding</h2><div class="desc">A separate budget for the big day. Tap any item to open its record — vendor details, the proposal, deposits and balance.</div></div>
       <button class="btn" onclick="addWeddingItem()">+ Add item</button>
     </div>
     <div id="weddingHero"></div>
     <div class="grid kpis" id="weddingKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
-    <div class="grid charts" style="grid-template-columns:1fr 1.2fr">
+    <div class="grid charts" style="grid-template-columns:1fr 1.2fr;margin-bottom:16px">
       <div class="panel">
         <div class="chart-h">Where it's going</div>
-        <div class="chart-s">Estimated cost by item</div>
+        <div class="chart-s">Total due by item</div>
         <div class="chart-box tall"><canvas id="weddingChart"></canvas></div>
       </div>
-      <div class="panel scrollx"><table id="weddingTable"></table></div>
+      <div class="panel">
+        <div class="chart-h">Paid vs. owed</div>
+        <div class="chart-s">Green is paid, clay is still owed — per item</div>
+        <div class="chart-box tall"><canvas id="weddingPaidChart"></canvas></div>
+      </div>
     </div>
+    <div class="panel scrollx"><table id="weddingTable"></table></div>
+  </section>
+
+  <!-- SARAH -->
+  <section id="view-sarah" class="hide">
+    <div class="sec-h">
+      <div><h2>Sarah</h2><div class="desc">Everything you've marked "Given to Sarah," pulled together across every month.</div></div>
+    </div>
+    <div id="sarahHero"></div>
+    <div class="panel scrollx"><table id="sarahTable"></table></div>
   </section>
 
   <!-- SETTINGS -->
@@ -638,8 +668,12 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "1.7.0";
-const KEY="ledger_state_v2";
+const APP_VERSION = "1.9.0";
+/* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
+   "shared" (empty, shared with Sarah). It's the ONLY line that differs
+   between the two builds. */
+const LEDGER_MODE = "shared";
+const KEY = (LEDGER_MODE==="shared") ? "ledger_state_v2_shared" : "ledger_state_v2";
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
 let tsel=new Set(), tselAmt={}, tselable=[];   // tracker multi-select (transient)
@@ -706,8 +740,8 @@ async function saveState(){
   return ok;
 }
 
-/* ---- Supabase (shared household ledger) ---- */
-const HOUSEHOLD_ID="household";
+/* ---- Supabase: personal (per-user private) or shared (household) row ---- */
+const HOUSEHOLD_ID="shared";   // shared build uses a dedicated 'shared' row
 let lastCloudError="";
 async function cloudInit(){
   if(!cloudEnabled) return;
@@ -722,7 +756,9 @@ async function cloudPull(){
   if(!sb||!sbUser) return null;
   setSync("syncing");
   try{
-    const {data,error}=await sb.from("household_ledger").select("data,updated_at").eq("id",HOUSEHOLD_ID).maybeSingle();
+    let data,error;
+    if(LEDGER_MODE==="shared"){({data,error}=await sb.from("household_ledger").select("data,updated_at").eq("id",HOUSEHOLD_ID).maybeSingle());}
+    else{({data,error}=await sb.from("personal_ledger").select("data,updated_at").eq("user_id",sbUser.id).maybeSingle());}
     if(error)throw error;
     lastCloudError="";setSync("synced");
     return data?data.data:null;
@@ -732,7 +768,9 @@ function cloudSaveDebounced(){setSync("syncing");clearTimeout(cloudSaveTimer);cl
 async function cloudPush(){
   if(!sb||!sbUser){setSync(cloudEnabled?"signin":"local");return false;}
   try{
-    const {error}=await sb.from("household_ledger").upsert({id:HOUSEHOLD_ID,data:S,updated_at:new Date().toISOString()});
+    let error;
+    if(LEDGER_MODE==="shared"){({error}=await sb.from("household_ledger").upsert({id:HOUSEHOLD_ID,data:S,updated_at:new Date().toISOString()}));}
+    else{({error}=await sb.from("personal_ledger").upsert({user_id:sbUser.id,data:S,updated_at:new Date().toISOString()}));}
     if(error)throw error;
     lastCloudError="";setSync("synced");return true;
   }catch(e){lastCloudError=e.message||String(e);console.error("push failed",e);setSync("offline");return false;}
@@ -757,6 +795,16 @@ async function cloudSignIn(email,password,mode){
   }
 }
 async function cloudSignOut(){try{await sb.auth.signOut();}catch(e){}sbUser=null;setSync(cloudEnabled?"signin":"local");}
+async function refreshFromCloud(silent){
+  if(!(cloudEnabled&&sbUser)) return;
+  const cloud=await cloudPull();
+  if(cloud && (Number(cloud.updatedAt)||0) > (Number(S.updatedAt)||0)){
+    S=cloud;runMigrations();applyTheme(S.settings.theme||"light");
+    await localSet(S);
+    renderAll();
+    if(!silent)toast("Updated to the latest");
+  }else if(!silent){toast("Already up to date");}
+}
 
 /* ============================== SEED ============================== */
 const BILL_END="";  // bills run with no end date
@@ -798,6 +846,18 @@ function seed(){
     actuals:{}, adhoc:{}
   };
 }
+function seedEmpty(){
+  const now=new Date();const first=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+  return {
+    settings:{startDate:first,months:24,openingBalance:0,theme:"light"},
+    migrations:{endDate2027:true,noEndAnd2yr:true},
+    security:{pinHash:null},
+    history:{months:6,items:[],budgets:{},values:{}},
+    wedding:{budget:0,items:[]},
+    bills:[], income:[], actuals:{}, adhoc:{}, order:{}
+  };
+}
+function initialSeed(){return LEDGER_MODE==="shared"?seedEmpty():seed();}
 
 /* ============================== DATE HELPERS ============================== */
 const pad=n=>String(n).padStart(2,"0");
@@ -889,6 +949,7 @@ function renderAll(){const events=buildForecast();const keys=monthKeys(events);p
   if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);}
   if(activeTab==="history")renderHistory();
   if(activeTab==="wedding")renderWedding();
+  if(activeTab==="sarah")renderSarah(events);
   if(activeTab==="bills")renderBills();
   if(activeTab==="income")renderIncome();
   if(activeTab==="settings")fillSettings();}
@@ -1065,30 +1126,47 @@ function renderTracker(events){
     {lab:"Left to spend",val:fmt$0(leftToSpend),cls:cushionCls,dot:cv("--gold")},
   ];
   document.getElementById("trackKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
+  const settle=document.getElementById("settleCard");
+  if(settle){
+    const totalPaid=paidByMe+paidBySarah;
+    if(totalPaid>0){
+      const diff=(paidByMe-paidBySarah)/2;   // >0 Sarah owes you; <0 you owe Sarah
+      let line;
+      if(Math.abs(diff)<0.005) line=`<b class="pos">All square</b> — you've each covered ${fmt$0(totalPaid/2)}.`;
+      else if(diff>0) line=`<b class="pos">Sarah owes you ${fmt$0(diff)}</b> to split evenly.`;
+      else line=`<b class="neg">You owe Sarah ${fmt$0(-diff)}</b> to split evenly.`;
+      settle.innerHTML=`<div class="settle"><div class="settle-l"><span class="settle-tag">Split this month</span> ${line}</div>
+        <div class="settle-r"><span>You <b class="num">${fmt$0(paidByMe)}</b></span><span>Sarah <b class="num">${fmt$0(paidBySarah)}</b></span></div></div>`;
+    } else settle.innerHTML="";
+  }
   const pct=totalCount?Math.round(paidCount/totalCount*100):0;
   document.getElementById("trackCount").innerHTML=`${paidCount} of ${totalCount} paid · ${pct}%<div class="progress" style="width:150px;display:inline-block;vertical-align:middle;margin-left:10px"><div style="width:${pct}%"></div></div>`;
 
-  // rows — custom priority order first, then date
+  // rows — custom priority order first, then pay date
   const rows=[];
   const H=`<td class="drag" title="Drag to reorder">⠿</td>`;
+  const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
-  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,sel:false,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${fmtDate(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
+  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${shortD(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
   expenses.forEach(e=>{
-    const a=getActual(e.occId)||{paid:false,actual:null,by:null};const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
-    rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td>${fmtDate(e.date)}</td><td>${esc(e.name)}${byChip(a.by)}</td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td></td></tr>`});
+    const a=getActual(e.occId)||{paid:false,actual:null,by:null};
+    const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
+    const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
+    const late=parseDate(payDate)>e.date;
+    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
     rows.push({id:x.id,sort:d,html:`<tr data-rowid="${x.id}" class="${x.paid?'paidrow':''}">${selCell(x.id)}${H}
-      <td><input class="inp" type="date" value="${x.date||''}" style="width:148px;padding:5px 8px" onchange="editAdhoc('${x.id}','date',this.value)"></td>
-      <td><input class="inp" value="${esc(x.name||'')}" placeholder="What was it?" style="padding:5px 8px;min-width:120px" oninput="editAdhoc('${x.id}','name',this.value)">${byChip(x.by)}</td>
-      <td><span class="pill other" style="margin-bottom:4px;display:inline-block">Unplanned</span><input class="inp" value="${esc(x.category||'')}" placeholder="category" style="width:120px;padding:4px 8px" oninput="editAdhoc('${x.id}','category',this.value)"></td>
+      <td><input class="inp paydate" type="date" value="${x.date||''}" onchange="editAdhoc('${x.id}','date',this.value)"></td>
+      <td><span class="rec-link" onclick="openTrackRecord('${x.id}')">${esc(x.name)||'<span class="muted">Unplanned</span>'}</span>${byChip(x.by)}<div class="due-sub">unplanned</div></td>
+      <td><input class="inp" value="${esc(x.category||'')}" placeholder="category" style="width:120px;padding:5px 8px" oninput="editAdhoc('${x.id}','category',this.value)"></td>
       <td class="r muted">—</td>
       <td class="r"><input class="actin" type="number" step="0.01" placeholder="0" value="${x.amount||''}" onchange="editAdhoc('${x.id}','amount',this.value)"></td>
       <td class="r num muted">—</td>
       <td class="r"><input class="chk" type="checkbox" ${x.paid?'checked':''} onchange="editAdhoc('${x.id}','paid',this.checked)"></td>
-      <td class="r"><button class="iconbtn del" onclick="delAdhoc('${x.id}')">×</button></td></tr>`});
+      <td class="r"><button class="iconbtn" onclick="openTrackRecord('${x.id}')">Open</button></td></tr>`});
   });
   const ord=S.order[selMonth]||[];
   const oi=id=>{const i=ord.indexOf(id);return i===-1?1e9:i;};
@@ -1097,7 +1175,7 @@ function renderTracker(events){
   if(!rows.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing for ${monthLabel(selMonth)} yet — add an expense to start.</td></tr></tbody>`;}
   else{
     const allSel=tselable.length&&tselable.every(id=>tsel.has(id));
-    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
+    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Pay date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
     makeSortable(tbl.querySelector("tbody"),".drag",newOrder=>{S.order[selMonth]=newOrder;saveState();});
   }
   renderTrackSelBar();
@@ -1157,6 +1235,50 @@ function makeSortable(tbody,handleSel,onReorder){
 }
 function onActual(occId,v){setActual(occId,{actual:v});renderTracker(buildForecast());}
 function onPaid(occId,c){setActual(occId,c?{paid:true}:{paid:false,by:null});renderTracker(buildForecast());}
+function onPayDate(occId,v){setActual(occId,{payDate:v});renderTracker(buildForecast());}
+
+function openTrackRecord(id){
+  const ev=buildForecast().find(e=>e.occId===id&&e.monthKey===selMonth);
+  const ad=(S.adhoc[selMonth]||[]).find(x=>x.id===id);
+  if(ev){
+    const a=getActual(id)||{paid:false,actual:null,by:null,payDate:null,notes:""};
+    const payDate=a.payDate||ymd(ev.date);
+    document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>${esc(ev.name)}</h3>
+      <div class="muted" style="font-size:12.5px;margin:-8px 0 14px">${esc(ev.category)} · budgeted ${fmt$(ev.amount)}</div>
+      <div class="form-grid">
+        <div class="field"><label>Actually due</label><input class="inp" value="${fmtDate(ev.date)}" disabled></div>
+        <div class="field"><label>Planned pay date</label><input id="tr_pay" class="inp" type="date" value="${payDate}"></div>
+        <div class="field"><label>Actual amount</label><input id="tr_actual" class="inp" type="number" step="0.01" placeholder="${Math.round(ev.amount)}" value="${(a.actual!=null&&a.actual!=="")?a.actual:""}"></div>
+        <div class="field"><label>Paid by</label><select id="tr_by" class="inp"><option value="">— not paid —</option><option value="me" ${a.paid&&a.by!=="sarah"?"selected":""}>You (paid)</option><option value="sarah" ${a.paid&&a.by==="sarah"?"selected":""}>Sarah (paid)</option></select></div>
+        <div class="field" style="grid-column:span 2"><label>Notes</label><input id="tr_notes" class="inp" value="${esc(a.notes||"")}"></div>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin-top:10px">The due date comes from the bill. Change the pay date to schedule when you'll actually pay it — the list re-sorts by pay date, and "due …" still shows the real deadline.</div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal();openItem('bill','${ev.itemId}')">Edit the bill…</button><button class="btn" onclick="saveTrackRecord('${id}')">Save</button></div>
+    </div></div>`;
+  } else if(ad){
+    document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>Unplanned expense</h3>
+      <div class="form-grid">
+        <div class="field"><label>Date</label><input id="ar_date" class="inp" type="date" value="${ad.date||''}"></div>
+        <div class="field"><label>Amount</label><input id="ar_amount" class="inp" type="number" step="0.01" value="${ad.amount||''}"></div>
+        <div class="field" style="grid-column:span 2"><label>What was it?</label><input id="ar_name" class="inp" value="${esc(ad.name||'')}"></div>
+        <div class="field"><label>Category</label><input id="ar_category" class="inp" value="${esc(ad.category||'')}"></div>
+        <div class="field"><label>Paid by</label><select id="ar_by" class="inp"><option value="">— not paid —</option><option value="me" ${ad.paid&&ad.by!=="sarah"?"selected":""}>You (paid)</option><option value="sarah" ${ad.paid&&ad.by==="sarah"?"selected":""}>Sarah (paid)</option></select></div>
+      </div>
+      <div class="modal-actions"><button class="btn danger" onclick="delAdhoc('${ad.id}');closeModal()">Delete</button><button class="btn" onclick="saveAdhocRecord('${ad.id}')">Save</button></div>
+    </div></div>`;
+  }
+}
+function saveTrackRecord(id){
+  const by=document.getElementById("tr_by").value;
+  setActual(id,{payDate:document.getElementById("tr_pay").value,actual:document.getElementById("tr_actual").value,notes:document.getElementById("tr_notes").value.trim(),paid:!!by,by:by==="sarah"?"sarah":(by?"me":null)});
+  closeModal();renderTracker(buildForecast());toast("Saved");
+}
+function saveAdhocRecord(id){
+  const it=(S.adhoc[selMonth]||[]).find(x=>x.id===id);if(!it)return;
+  it.date=document.getElementById("ar_date").value;it.amount=toNum(document.getElementById("ar_amount").value);it.name=document.getElementById("ar_name").value.trim();it.category=document.getElementById("ar_category").value.trim();
+  const by=document.getElementById("ar_by").value;it.paid=!!by;it.by=by==="sarah"?"sarah":(by?"me":null);
+  saveState();closeModal();renderTracker(buildForecast());toast("Saved");
+}
 function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:"",paid:false});saveState();renderTracker(buildForecast());}
 function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date"||field==="paid")renderTracker(buildForecast());}
 function delAdhoc(id){S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);saveState();renderTracker(buildForecast());}
@@ -1384,26 +1506,26 @@ function setHistMonths(n){S.history.months=Math.max(1,Math.min(12,parseInt(n||6,
 /* ============================== WEDDING ============================== */
 function renderWedding(){
   const w=S.wedding;const items=w.items||[];
-  const est=items.reduce((s,i)=>s+toNum(i.estimated),0);
+  const due=items.reduce((s,i)=>s+toNum(i.estimated),0);
   const paid=items.reduce((s,i)=>s+toNum(i.paid),0);
-  const remaining=est-paid;
+  const owed=due-paid;
   const target=toNum(w.budget);
+  const overT=target>0?due-target:0;
+  const paidPct=due>0?Math.max(0,Math.min(100,Math.round(paid/due*100))):0;
+  const owedPct=due>0?Math.max(0,Math.min(100,100-paidPct)):0;
 
-  // hero: target vs estimated, with paid progress
-  const overEst=target>0?est-target:0;
-  const paidPct=est>0?Math.max(0,Math.min(100,Math.round(paid/est*100))):0;
   document.getElementById("weddingHero").innerHTML=`
     <div class="hero">
       <div class="hero-main">
-        <div class="hero-lab">Still to pay</div>
-        <div class="hero-val num ${remaining>0?'neg':'pos'}">${fmt$0(remaining)}</div>
-        <div class="hero-sub">${fmt$0(paid)} paid of ${fmt$0(est)} estimated${target>0?` · target ${fmt$0(target)}${overEst>0?` (over by ${fmt$0(overEst)})`:overEst<0?` (${fmt$0(-overEst)} under)`:""}`:""}</div>
+        <div class="hero-lab">Total owed</div>
+        <div class="hero-val num ${owed>0?'neg':'pos'}">${fmt$0(owed)}</div>
+        <div class="hero-sub">${fmt$0(paid)} paid of ${fmt$0(due)} total due${target>0?` · target ${fmt$0(target)}${overT>0?` (over by ${fmt$0(overT)})`:overT<0?` (${fmt$0(-overT)} under)`:""}`:""}</div>
       </div>
       <div class="hero-bar-wrap">
-        <div class="hero-bar"><span class="seg paid" style="width:${paidPct}%"></span></div>
+        <div class="hero-bar"><span class="seg paid" style="width:${paidPct}%"></span><span class="seg owed" style="width:${owedPct}%"></span></div>
         <div class="hero-legend">
           <span><i style="background:var(--sage)"></i>Paid ${fmt$0(paid)}</span>
-          <span><i style="background:var(--clay)"></i>Remaining ${fmt$0(Math.max(0,remaining))}</span>
+          <span><i style="background:var(--clay)"></i>Owed ${fmt$0(Math.max(0,owed))}</span>
           <span style="margin-left:auto">Target <input class="actin" type="number" step="100" value="${w.budget||''}" placeholder="0" onchange="setWeddingBudget(this.value)" style="width:110px"></span>
         </div>
       </div>
@@ -1411,9 +1533,9 @@ function renderWedding(){
 
   const cards=[
     {lab:"Target budget",val:target?fmt$0(target):"—",cls:"info",dot:cv("--blue")},
-    {lab:"Estimated total",val:fmt$0(est),cls:"gold",dot:cv("--gold")},
-    {lab:"Paid so far",val:fmt$0(paid),cls:"pos",dot:cv("--sage")},
-    {lab:"Remaining",val:fmt$0(remaining),cls:remaining>0?"neg":"pos",dot:cv("--clay")},
+    {lab:"Total due",val:fmt$0(due),cls:"gold",dot:cv("--gold")},
+    {lab:"Paid total",val:fmt$0(paid),cls:"pos",dot:cv("--sage")},
+    {lab:"Owed total",val:fmt$0(owed),cls:owed>0?"neg":"pos",dot:cv("--clay")},
   ];
   document.getElementById("weddingKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
 
@@ -1422,18 +1544,20 @@ function renderWedding(){
   else{
     const rows=items.map(i=>{
       const rem=toNum(i.estimated)-toNum(i.paid);const done=toNum(i.estimated)>0&&rem<=0;
+      const hasProp=!!(i.proposalLink||i.proposalFile);
       return `<tr class="${done?'paidrow':''}">
-        <td><input class="inp" value="${esc(i.item||'')}" placeholder="Item" style="padding:5px 8px;min-width:110px" oninput="editWedding('${i.id}','item',this.value)"></td>
-        <td><input class="inp" value="${esc(i.vendor||'')}" placeholder="Vendor" style="padding:5px 8px;min-width:100px" oninput="editWedding('${i.id}','vendor',this.value)"></td>
-        <td><input class="inp" type="date" value="${i.dueDate||''}" style="width:148px;padding:5px 8px" onchange="editWedding('${i.id}','dueDate',this.value)"></td>
-        <td class="r"><input class="actin" type="number" step="0.01" value="${i.estimated||''}" placeholder="0" onchange="editWedding('${i.id}','estimated',this.value)"></td>
-        <td class="r"><input class="actin" type="number" step="0.01" value="${i.paid||''}" placeholder="0" onchange="editWedding('${i.id}','paid',this.value)"></td>
+        <td><b>${esc(i.item||'—')}</b>${hasProp?' <span class="pill subs" title="Proposal attached">proposal</span>':''}</td>
+        <td>${esc(i.vendor||'')}</td>
+        <td>${i.dueDate?fmtDate(parseDate(i.dueDate)):'—'}</td>
+        <td class="r num">${fmt$(toNum(i.estimated))}</td>
+        <td class="r num pos">${fmt$(toNum(i.paid))}</td>
         <td class="r num ${rem>0?'neg':'pos'}">${fmt$(rem)}</td>
-        <td class="r"><button class="iconbtn del" onclick="delWeddingItem('${i.id}')">×</button></td></tr>`;
+        <td class="r"><button class="iconbtn" onclick="openWeddingRecord('${i.id}')">Open</button> <button class="iconbtn del" onclick="delWeddingItem('${i.id}')">×</button></td></tr>`;
     }).join("");
-    t.innerHTML=`<thead><tr><th>Item</th><th>Vendor</th><th>Due</th><th class="r">Estimated</th><th class="r">Paid</th><th class="r">Left</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;
+    t.innerHTML=`<thead><tr><th>Item</th><th>Vendor</th><th>Due date</th><th class="r">Total due</th><th class="r">Paid</th><th class="r">Owed</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;
   }
   drawWedding(items);
+  drawWeddingPaid(items);
 }
 function drawWedding(items){
   destroy("wed");
@@ -1444,21 +1568,154 @@ function drawWedding(items){
   charts.wed=new Chart(ctx,{type:"doughnut",data:{labels:data.map(i=>i.item||"—"),datasets:[{data:data.map(i=>toNum(i.estimated)),backgroundColor:data.map((_,i)=>pal[i%pal.length]),borderColor:cv("--surface"),borderWidth:3}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"right",labels:{color:cv("--text-dim"),boxWidth:10,boxHeight:10,padding:8,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt$(c.parsed)}`}}}}});
 }
-function editWedding(id,field,val){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it[field]=(field==="estimated"||field==="paid")?toNum(val):val;saveState();
-  if(field==="estimated"||field==="paid"){ // refresh totals + chart, keep focus
-    renderWedding();
-  }
+function drawWeddingPaid(items){
+  destroy("wedpaid");
+  const data=items.filter(i=>toNum(i.estimated)>0||toNum(i.paid)>0);
+  const ctx=document.getElementById("weddingPaidChart");
+  if(!data.length){if(charts.wedpaid){charts.wedpaid.destroy();delete charts.wedpaid;}ctx.getContext("2d").clearRect(0,0,ctx.width,ctx.height);return;}
+  charts.wedpaid=new Chart(ctx,{type:"bar",data:{labels:data.map(i=>i.item||"—"),datasets:[
+    {label:"Paid",data:data.map(i=>toNum(i.paid)),backgroundColor:cv("--sage"),borderRadius:4,stack:"s"},
+    {label:"Owed",data:data.map(i=>Math.max(0,toNum(i.estimated)-toNum(i.paid))),backgroundColor:cv("--clay"),borderRadius:4,stack:"s"}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:cv("--text-dim"),boxWidth:12,padding:12,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt$(c.parsed.x)}`}}},
+      scales:{x:{stacked:true,ticks:{color:cv("--text-dim"),callback:v=>"$"+(v/1000).toFixed(1)+"k"},grid:{color:cv("--line")}},y:{stacked:true,ticks:{color:cv("--text-dim")},grid:{display:false}}}}});
 }
-function addWeddingItem(){S.wedding.items.push({id:uid(),item:"",vendor:"",dueDate:"",estimated:0,paid:0,notes:""});saveState();renderWedding();}
+function editWedding(id,field,val){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it[field]=(field==="estimated"||field==="paid")?toNum(val):val;saveState();if(field==="estimated"||field==="paid")renderWedding();}
+function addWeddingItem(){const it={id:uid(),item:"",vendor:"",dueDate:"",estimated:0,paid:0,notes:""};S.wedding.items.push(it);saveState();renderWedding();openWeddingRecord(it.id);}
 function delWeddingItem(id){if(!confirm("Remove this wedding item?"))return;S.wedding.items=S.wedding.items.filter(x=>x.id!==id);saveState();renderWedding();}
 function setWeddingBudget(v){S.wedding.budget=toNum(v);saveState();renderWedding();}
+
+/* ---- wedding line-item record + proposal ---- */
+function proposalStatusHtml(it){
+  if(it.proposalLink||it.proposalFile){
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="pill savings">${esc(it.proposalName||"Proposal")}</span>
+      <button class="btn ghost sm" onclick="viewProposal('${it.id}')">View proposal</button>
+      <button class="iconbtn del" onclick="removeProposal('${it.id}')">Remove</button></div>`;
+  }
+  return `<div class="muted" style="font-size:12.5px">No proposal attached yet.</div>`;
+}
+function openWeddingRecord(id){
+  const it=S.wedding.items.find(x=>x.id===id);if(!it)return;
+  const v=k=>esc(it[k]==null?"":it[k]);
+  document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>${esc(it.item||"Wedding item")}</h3>
+    <div class="form-grid">
+      <div class="field" style="grid-column:span 2"><label>Item</label><input id="wr_item" class="inp" value="${v('item')}"></div>
+      <div class="field"><label>Vendor / company</label><input id="wr_vendor" class="inp" value="${v('vendor')}"></div>
+      <div class="field"><label>Contact person</label><input id="wr_contact" class="inp" value="${v('contact')}"></div>
+      <div class="field"><label>Email</label><input id="wr_email" class="inp" type="email" value="${v('email')}"></div>
+      <div class="field"><label>Phone</label><input id="wr_phone" class="inp" value="${v('phone')}"></div>
+      <div class="field"><label>Website</label><input id="wr_website" class="inp" value="${v('website')}"></div>
+      <div class="field"><label>Due date</label><input id="wr_due" class="inp" type="date" value="${v('dueDate')}"></div>
+      <div class="field"><label>Total due</label><input id="wr_estimated" class="inp" type="number" step="0.01" value="${it.estimated||''}"></div>
+      <div class="field"><label>Paid so far</label><input id="wr_paid" class="inp" type="number" step="0.01" value="${it.paid||''}"></div>
+      <div class="field" style="grid-column:span 2"><label>Address</label><input id="wr_address" class="inp" value="${v('address')}"></div>
+      <div class="field" style="grid-column:span 2"><label>Notes</label><input id="wr_notes" class="inp" value="${v('notes')}"></div>
+    </div>
+    <div class="divider"></div>
+    <label style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);font-weight:600">Proposal</label>
+    <div id="wr_propStatus" style="margin:8px 0 12px">${proposalStatusHtml(it)}</div>
+    <div class="form-grid" style="grid-template-columns:1fr auto">
+      <div class="field"><label>Proposal link (optional)</label><input id="wr_link" class="inp" value="${v('proposalLink')}" placeholder="https://…"></div>
+      <div class="field"><label>&nbsp;</label>
+        <button class="btn ghost" onclick="document.getElementById('wr_file').click()">Upload PDF</button>
+        <input type="file" id="wr_file" accept="application/pdf" class="hide" onchange="handleProposalFile('${it.id}',this)">
+      </div>
+    </div>
+    <div class="muted" id="wr_importMsg" style="font-size:12px;margin-top:6px">Upload a PDF proposal and I'll pull the vendor's email, phone and website into the fields above automatically.</div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveWeddingRecord('${it.id}')">Save</button></div>
+  </div></div>`;
+}
+function saveWeddingRecord(id){
+  const it=S.wedding.items.find(x=>x.id===id);if(!it)return;
+  const g=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};
+  it.item=g("wr_item");it.vendor=g("wr_vendor");it.contact=g("wr_contact");it.email=g("wr_email");it.phone=g("wr_phone");it.website=g("wr_website");it.address=g("wr_address");it.dueDate=g("wr_due");it.notes=g("wr_notes");it.proposalLink=g("wr_link");
+  it.estimated=toNum(g("wr_estimated"));it.paid=toNum(g("wr_paid"));
+  saveState();closeModal();renderWedding();toast("Saved");
+}
+async function handleProposalFile(id,input){
+  const it=S.wedding.items.find(x=>x.id===id);if(!it)return;
+  const file=input.files&&input.files[0];if(!file)return;
+  if(file.size>2*1024*1024){toast("That PDF is over 2MB — attach a link instead to keep sync fast");}
+  const msg=document.getElementById("wr_importMsg");if(msg)msg.textContent="Reading proposal…";
+  // store the file (small ones only) so it syncs; large ones: keep name only + rely on link
+  try{
+    if(file.size<=2*1024*1024){
+      const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+      it.proposalFile=dataUrl;
+    }
+    it.proposalName=file.name;saveState();
+    const st=document.getElementById("wr_propStatus");if(st)st.innerHTML=proposalStatusHtml(it);
+    renderWedding();
+    await importFromProposal(id,file);
+  }catch(e){if(msg)msg.textContent="Couldn't read that file — you can still enter details by hand.";}
+}
+async function importFromProposal(id,file){
+  const it=S.wedding.items.find(x=>x.id===id);if(!it)return;
+  const msg=document.getElementById("wr_importMsg");
+  try{
+    if(!window.pdfjsLib){if(msg)msg.textContent="Proposal saved. (PDF reader unavailable, so enter vendor details by hand.)";return;}
+    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    let text="";
+    for(let p=1;p<=Math.min(pdf.numPages,10);p++){const page=await pdf.getPage(p);const c=await page.getTextContent();text+=c.items.map(i=>i.str).join(" ")+"\n";}
+    const email=(text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)||[])[0];
+    const phone=(text.match(/(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/)||[])[0];
+    let site=(text.match(/\b(?:https?:\/\/)?(?:www\.)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/\S*)?/)||[])[0];
+    if(!site){const m=text.match(/\b[a-zA-Z0-9-]+\.(?:com|net|co|studio|events|photography|band|dj)\b/);if(m)site=m[0];}
+    const setIf=(field,inputId,val)=>{if(val&&!it[field]){it[field]=val;const el=document.getElementById(inputId);if(el)el.value=val;}};
+    setIf("email","wr_email",email);
+    setIf("phone","wr_phone",phone);
+    setIf("website","wr_website",site);
+    if(!it.vendor){const guess=file.name.replace(/\.pdf$/i,"").replace(/[_-]+/g," ").replace(/proposal|quote|estimate|contract/ig,"").trim();if(guess){it.vendor=guess;const el=document.getElementById("wr_vendor");if(el)el.value=guess;}}
+    saveState();
+    const found=[email&&"email",phone&&"phone",site&&"website"].filter(Boolean);
+    if(msg)msg.textContent=found.length?`Imported ${found.join(", ")} from the proposal. Check and Save.`:"Proposal saved. I couldn't find contact details to import (it may be a scanned PDF) — enter them by hand.";
+    if(found.length)toast("Vendor details imported");
+  }catch(e){if(msg)msg.textContent="Proposal saved. Couldn't auto-read it — enter vendor details by hand.";}
+}
+function viewProposal(id){
+  const it=S.wedding.items.find(x=>x.id===id);if(!it)return;
+  if(it.proposalLink){window.open(it.proposalLink,"_blank");return;}
+  if(it.proposalFile){
+    try{const parts=it.proposalFile.split(",");const bin=atob(parts[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:"application/pdf"});const url=URL.createObjectURL(blob);window.open(url,"_blank");setTimeout(()=>URL.revokeObjectURL(url),60000);}
+    catch(e){toast("Couldn't open the proposal");}
+  }
+}
+function removeProposal(id){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it.proposalFile="";it.proposalName="";it.proposalLink="";saveState();const st=document.getElementById("wr_propStatus");if(st)st.innerHTML=proposalStatusHtml(it);renderWedding();}
+
+/* ============================== SARAH ============================== */
+function renderSarah(events){
+  events=events||buildForecast();
+  const byId={};events.forEach(e=>{byId[e.occId]=e;});
+  const rows=[];
+  Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const a=m[occId];if(a&&a.by==="sarah"){const e=byId[occId];if(e)rows.push({date:e.date,name:e.name,category:e.category,amount:(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount,month:mk,paid:!!a.paid});}});});
+  Object.keys(S.adhoc||{}).forEach(mk=>{(S.adhoc[mk]||[]).forEach(x=>{if(x.by==="sarah")rows.push({date:parseDate(x.date)||parseDate(mk+"-15"),name:x.name||"Unplanned",category:x.category||"Unplanned",amount:toNum(x.amount),month:mk,paid:!!x.paid});});});
+  rows.sort((a,b)=>b.date-a.date);
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+
+  document.getElementById("sarahHero").innerHTML=`
+    <div class="hero">
+      <div class="hero-main">
+        <div class="hero-lab">Total given to Sarah</div>
+        <div class="hero-val num gold">${fmt$0(total)}</div>
+        <div class="hero-sub">${rows.length} item${rows.length===1?"":"s"} across ${new Set(rows.map(r=>r.month)).size} month${new Set(rows.map(r=>r.month)).size===1?"":"s"}</div>
+      </div>
+    </div>`;
+
+  const t=document.getElementById("sarahTable");
+  if(!rows.length){t.innerHTML=`<tbody><tr><td class="empty">Nothing marked "Given to Sarah" yet. In This Month, select items and tap "Given to Sarah," or open a record and set Paid by → Sarah.</td></tr></tbody>`;return;}
+  const body=rows.map(r=>`<tr><td>${monthLabel(r.month)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td><span class="pill sarah">${esc(r.category)}</span></td><td class="r num">${fmt$(r.amount)}</td><td class="r">${r.paid?'<span class="pill savings">paid</span>':'<span class="pill other">pending</span>'}</td></tr>`).join("");
+  t.innerHTML=`<thead><tr><th>Month</th><th>Date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r">Status</th></tr></thead><tbody>${body}</tbody>`;
+}
 
 /* ============================== SETTINGS / DATA ============================== */
 function fillSettings(){document.getElementById("setStart").value=S.settings.startDate||"";document.getElementById("setMonths").value=S.settings.months||6;document.getElementById("setOpening").value=S.settings.openingBalance||0;renderCloudStatus();}
 function saveSettings(){S.settings.startDate=document.getElementById("setStart").value||S.settings.startDate;S.settings.months=Math.max(1,Math.min(24,parseInt(document.getElementById("setMonths").value||6,10)));S.settings.openingBalance=toNum(document.getElementById("setOpening").value);selMonth=null;saveState();renderAll();toast("Settings saved");}
 function exportData(){download("ledger-backup.json",JSON.stringify(S,null,2),"application/json");}
 function importData(e){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{const obj=JSON.parse(r.result);if(!obj.bills||!obj.income||!obj.settings)throw 0;obj.actuals=obj.actuals||{};obj.adhoc=obj.adhoc||{};obj.migrations=obj.migrations||{};obj.security=obj.security||{pinHash:null};S=obj;selMonth=null;applyTheme(S.settings.theme||"light");saveState();renderAll();toast("Data imported");}catch(err){toast("Invalid backup file");}};r.readAsText(file);e.target.value="";}
-async function resetAll(){if(!confirm("Replace everything with the original sample data?"))return;S=seed();sel.clear();selMonth=null;applyTheme("light");await saveState();renderAll();toast("Reset to sample data");}
+async function resetAll(){if(!confirm(LEDGER_MODE==="shared"?"Clear everything and start empty?":"Replace everything with the original sample data?"))return;S=initialSeed();sel.clear();selMonth=null;applyTheme("light");await saveState();renderAll();toast("Reset to sample data");}
 
 /* ============================== UTIL ============================== */
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -1501,7 +1758,7 @@ function lockNow(){initLock();}
 async function forgotPin(){
   if(lockMode==="create"||lockMode==="confirm"){entry="";firstEntry="";lockMode="create";updateDots();setLockText("Create a 6-digit PIN");return;}
   if(!confirm("Forgot your PIN?\n\nThe only way back in is to erase all data and start fresh, since your ledger is protected by the PIN. Continue?"))return;
-  S=seed();entry="";firstEntry="";await saveState();applyTheme(S.settings.theme||"light");initLock();
+  S=initialSeed();entry="";firstEntry="";await saveState();applyTheme(S.settings.theme||"light");initLock();
 }
 
 /* ============================== CLOUD AUTH UI ============================== */
@@ -1558,7 +1815,7 @@ function renderCloudStatus(){
   let body;
   if(sbUser){
     const warn=(syncState==="offline"||lastCloudError)?`<div class="auth-msg" style="margin-top:8px">${esc(cloudErrorFriendly())}</div>`:"";
-    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill ${syncState==='offline'?'debt':'savings'}">${syncState==='offline'?'Offline':'Synced'}</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="settingsSignOut()">Sign out</button><button class="btn ghost sm" onclick="disconnectCloud()">Change keys</button></div>${warn}`;
+    body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill ${syncState==='offline'?'debt':'savings'}">${syncState==='offline'?'Offline':'Synced'}</span><span class="num" style="font-size:13px">${esc(sbUser.email||"")}</span><button class="btn ghost sm" onclick="refreshFromCloud()">Sync now</button><button class="btn ghost sm" onclick="settingsSignOut()">Sign out</button><button class="btn ghost sm" onclick="disconnectCloud()">Change keys</button></div>${warn}`;
   }else{
     body=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pill subs">Not signed in</span><span class="muted" style="font-size:13px">Sign in to load the shared ledger.</span><button class="btn sm" onclick="showAuth()">Sign in</button><button class="btn ghost sm" onclick="disconnectCloud()">Change keys</button></div>`;
   }
@@ -1648,9 +1905,15 @@ async function denyCloud(){
     new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)setIM(n);}).observe(document.body,{childList:true,subtree:true});
   }catch(e){}
   const vt=document.getElementById("verTag");if(vt)vt.textContent="v"+APP_VERSION;
+  const mt=document.getElementById("modeTag");if(mt){mt.className="modelabel "+LEDGER_MODE;mt.textContent=LEDGER_MODE==="shared"?"Shared":"Personal";}
+  const kick=document.querySelector(".brand .kick");if(kick)kick.textContent=LEDGER_MODE==="shared"?"Shared with Sarah":"Your money, month by month";
+  // keep devices consistent: re-pull latest whenever the app regains focus
+  let lastRefresh=0;
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&Date.now()-lastRefresh>4000){lastRefresh=Date.now();refreshFromCloud(true);}});
+  window.addEventListener("focus",()=>{if(Date.now()-lastRefresh>4000){lastRefresh=Date.now();refreshFromCloud(true);}});
   setLoad("Reading your saved data…");
   S=await loadState();
-  if(!S){setLoad("Setting things up…");S=seed();}
+  if(!S){setLoad("Setting things up…");S=initialSeed();}
   if(cloudEnabled){
     setLoad("Connecting to your account…");
     await cloudInit();
