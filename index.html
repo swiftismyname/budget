@@ -81,6 +81,12 @@
   .due-sub{font-size:11px;color:var(--text-faint);margin-top:2px}
   .due-sub.due-late{color:var(--clay)}
   input.paydate{width:140px;padding:6px 8px;font-family:'Spline Sans Mono',monospace;font-size:12.5px}
+  .sharedtoggle{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px 14px;background:var(--lav-soft);border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:13px;font-weight:600}
+  .sharedtoggle .muted{font-size:12px}
+  .pill.shared{background:var(--lav-soft);color:var(--lav)}
+  .michaelbtn{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text-dim);cursor:pointer;box-shadow:var(--shadow-sm);font-family:'Plus Jakarta Sans'}
+  .michaelbtn:hover{border-color:var(--accent-lav);color:var(--text)}
+  .michaelbtn.on{background:var(--accent-lav);color:#fff;border-color:var(--accent-lav)}
   .mast-right{display:flex;align-items:center;gap:10px}
   .monthsel{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 16px;box-shadow:var(--shadow-sm)}
   .monthsel label{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);font-weight:600}
@@ -427,6 +433,7 @@
       <div class="sub">A calm look at this month and the months ahead. <span id="verTag" class="vertag"></span><span id="modeTag"></span></div>
     </div>
     <div class="mast-right">
+      <button class="michaelbtn" id="michaelBtn" onclick="michaelToggle()" style="display:none">🔒 Michael</button>
       <button class="syncchip" id="syncChip" onclick="go('settings')" title="Sync status"><span class="sync-ico local">•</span>On this device</button>
       <div class="monthsel">
         <label>Month</label>
@@ -668,15 +675,18 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "2.2.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
-const LEDGER_MODE = "shared";
-const KEY = (LEDGER_MODE==="shared") ? "ledger_state_v2_shared" : "ledger_state_v2";
+const OWNER_EMAIL = "michaeljswift@gmail.com";   // Michael = owner; anyone else = shared partner
+let LEDGER_MODE = "personal";                    // set at runtime from the signed-in account
+function currentKey(){return LEDGER_MODE==="shared" ? "ledger_state_v2_shared" : "ledger_state_v2";}
+function setModeFromUser(){LEDGER_MODE = (sbUser && sbUser.email && sbUser.email.toLowerCase()!==OWNER_EMAIL.toLowerCase()) ? "shared" : "personal";}
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
 let tsel=new Set(), tselAmt={}, tselable=[];   // tracker multi-select (transient)
+let lens="shared";   // "shared" (main view) or "personal" (Michael tab, password-gated)
 
 // cloud runtime
 const CFG_KEY="ledger_cloud_cfg";
@@ -701,11 +711,13 @@ function detectPersist(){
   try{const k="__ledger_test__";localStorage.setItem(k,"1");localStorage.removeItem(k);persistAvailable=true;}catch(e){persistAvailable=false;}
 }
 async function localGet(){
+  const KEY=currentKey();
   if(hasClaudeStore){try{const r=await window.storage.get(KEY);if(r&&r.value)return JSON.parse(r.value);}catch(e){}}
   try{const v=localStorage.getItem(KEY);if(v)return JSON.parse(v);}catch(e){}
   return memStore[KEY]?JSON.parse(memStore[KEY]):null;
 }
 async function localSet(obj){
+  const KEY=currentKey();
   const str=JSON.stringify(obj);let ok=false;
   if(hasClaudeStore){try{await window.storage.set(KEY,str);ok=true;}catch(e){}}
   if(!ok){try{localStorage.setItem(KEY,str);ok=true;}catch(e){}}
@@ -737,6 +749,7 @@ async function saveState(){
     toast("This browser isn't saving locally — host the file or sign in to sync to keep changes.");
   }
   if(cloudEnabled && sbUser) cloudSaveDebounced();
+  if(cloudEnabled && sbUser && LEDGER_MODE==="personal") publishSharedDebounced();
   return ok;
 }
 
@@ -750,6 +763,7 @@ async function cloudInit(){
     sb=mod.createClient(cloudCfg.url,cloudCfg.key,{auth:{persistSession:true,autoRefreshToken:true}});
     const {data:{session}}=await sb.auth.getSession();
     sbUser=session?session.user:null;
+    setModeFromUser();
   }catch(e){lastCloudError=e.message||String(e);console.error("cloud init failed",e);sb=null;}
 }
 async function cloudPull(){
@@ -782,12 +796,12 @@ async function cloudSignIn(email,password,mode){
       const {data,error}=await sb.auth.signUp({email,password});
       if(error)throw error;
       if(!data.session)return{ok:false,msg:"Account created — check your email to confirm, then sign in.",created:true};
-      sbUser=data.user;return{ok:true};
+      sbUser=data.user;setModeFromUser();return{ok:true};
     }
     const {data,error}=await sb.auth.signInWithPassword({email,password});
     if(error)throw error;
     if(!data.session)return{ok:false,msg:"Confirm your email first, then sign in."};
-    sbUser=data.user;return{ok:true};
+    sbUser=data.user;setModeFromUser();return{ok:true};
   }catch(e){
     let m=e.message||"Sign-in failed";
     if(/signups? not allowed|disabled/i.test(m)) m="Account creation is turned off in Supabase. Enable it under Authentication → Providers → Email, or ask the admin.";
@@ -804,6 +818,63 @@ async function refreshFromCloud(silent){
     renderAll();
     if(!silent)toast("Updated to the latest");
   }else if(!silent){toast("Already up to date");}
+  await reconcileFromShared(silent);
+}
+
+/* ---- Shared subset: publish shared-tagged items to Sarah; merge her changes back ---- */
+let sharePubTimer=null;
+function hasSharedItems(){return (S.bills||[]).some(b=>!b.private)||(S.income||[]).some(i=>!i.private)||Object.keys(S.adhoc||{}).some(mk=>(S.adhoc[mk]||[]).some(x=>!x.private))||((S.wedding&&S.wedding.items||[]).length>0);}
+function sharedItemIdSet(){const s=new Set();(S.bills||[]).forEach(b=>{if(!b.private)s.add(b.id);});(S.income||[]).forEach(i=>{if(!i.private)s.add(i.id);});return s;}
+function buildSharedPayload(){
+  const ids=sharedItemIdSet();
+  const sAdhoc={};Object.keys(S.adhoc||{}).forEach(mk=>{const arr=(S.adhoc[mk]||[]).filter(x=>!x.private);if(arr.length)sAdhoc[mk]=arr;});
+  const sActuals={};Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};const out={};Object.keys(m).forEach(occId=>{if(ids.has(occId.split("__")[0]))out[occId]=m[occId];});if(Object.keys(out).length)sActuals[mk]=out;});
+  return {
+    ownerId: sbUser?sbUser.id:null, updatedAt: Date.now(),
+    settings:{startDate:S.settings.startDate,months:S.settings.months,openingBalance:0,theme:S.settings.theme||"light"},
+    migrations:{endDate2027:true,noEndAnd2yr:true}, security:{pinHash:null},
+    history:{months:6,items:[],budgets:{},values:{}},
+    wedding: S.wedding||{budget:0,items:[]},
+    bills:(S.bills||[]).filter(b=>!b.private).map(b=>Object.assign({},b)),
+    income:(S.income||[]).filter(i=>!i.private).map(i=>Object.assign({},i)),
+    actuals:sActuals, adhoc:sAdhoc, order:{}
+  };
+}
+function mergeSharedBack(Sh){
+  if(!Sh) return false; let changed=false;
+  Object.keys(Sh.actuals||{}).forEach(mk=>{const m=Sh.actuals[mk]||{};S.actuals[mk]=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const cur=S.actuals[mk][occId]||{};const inc=m[occId]||{};const merged=Object.assign({},cur);
+    if(inc.paid&&!cur.paid){merged.paid=true;merged.by=inc.by||cur.by;changed=true;}
+    if((inc.actual!=null&&inc.actual!=="")&&(cur.actual==null||cur.actual==="")){merged.actual=inc.actual;changed=true;}
+    if(inc.payDate&&!cur.payDate){merged.payDate=inc.payDate;changed=true;}
+    S.actuals[mk][occId]=merged;});});
+  Object.keys(Sh.adhoc||{}).forEach(mk=>{(Sh.adhoc[mk]||[]).forEach(x=>{S.adhoc[mk]=S.adhoc[mk]||[];if(!S.adhoc[mk].some(y=>y.id===x.id)){S.adhoc[mk].push(Object.assign({},x,{private:false}));changed=true;}});});
+  // reflect Sarah's wedding deposits back
+  if(Sh.wedding&&Array.isArray(Sh.wedding.items)){Sh.wedding.items.forEach(si=>{const mine=(S.wedding.items||[]).find(w=>w.id===si.id);if(mine){if(toNum(si.paid)>toNum(mine.paid)){mine.paid=toNum(si.paid);changed=true;}}});}
+  return changed;
+}
+async function reconcileFromShared(silent){
+  if(LEDGER_MODE!=="personal"||!(cloudEnabled&&sbUser))return;
+  try{
+    const {data}=await sb.from("household_ledger").select("data").eq("id","shared").maybeSingle();
+    const Sh=data?data.data:null;
+    if(mergeSharedBack(Sh)){await localSet(S);renderAll();if(!silent)toast("Pulled Sarah's updates in");}
+  }catch(e){console.error("reconcile shared failed",e);}
+}
+function publishSharedDebounced(){
+  if(LEDGER_MODE!=="personal"||!(cloudEnabled&&sbUser))return;
+  clearTimeout(sharePubTimer);sharePubTimer=setTimeout(publishShared,1400);
+}
+async function publishShared(){
+  if(LEDGER_MODE!=="personal"||!(cloudEnabled&&sbUser))return;
+  if(!hasSharedItems())return;
+  try{
+    const {data}=await sb.from("household_ledger").select("data").eq("id","shared").maybeSingle();
+    const Sh=data?data.data:null;
+    if(mergeSharedBack(Sh)){await localSet(S);}
+    const payload=buildSharedPayload();
+    const {error}=await sb.from("household_ledger").upsert({id:"shared",data:payload,updated_at:new Date().toISOString()});
+    if(error)throw error;
+  }catch(e){console.error("publishShared failed",e);}
 }
 
 /* ============================== SEED ============================== */
@@ -901,10 +972,10 @@ function expandDates(frequency,days,itemStart,itemEnd,fStart,fEndExcl){
 function buildForecast(){
   const st=S.settings;const fStart=parseDate(st.startDate)||new Date();const fEndExcl=addMonths(fStart,Number(st.months)||6);
   let events=[];
-  S.bills.filter(b=>b.active).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
+  S.bills.filter(b=>b.active && (lens==="personal"||!b.private)).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
     expandDates(b.frequency,parseDays(b.days),b.startDate||st.startDate,b.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,itemId:b.id}));});
-  S.income.filter(i=>i.active).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
+  S.income.filter(i=>i.active && (lens==="personal"||!i.private)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
     expandDates(i.frequency,parseDays(i.days),i.startDate||st.startDate,i.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Income",name:i.source,group:i.group||"Income",category:"Income",amount:a,itemId:i.id}));});
   events.sort((a,b)=>a.date-b.date||(a.type===b.type?0:a.type==="Income"?-1:1));
@@ -939,6 +1010,40 @@ function go(tab){activeTab=tab;
 function openMore(){document.getElementById("moreSheet").classList.add("open");}
 function closeMore(){document.getElementById("moreSheet").classList.remove("open");}
 function goMore(tab){closeMore();go(tab);}
+function setMichaelBtn(){
+  const b=document.getElementById("michaelBtn");if(!b)return;
+  b.style.display=(LEDGER_MODE==="personal")?"flex":"none";
+  b.classList.toggle("on",lens==="personal");
+  b.innerHTML=lens==="personal"?'🔓 Personal':'🔒 Michael';
+}
+function michaelToggle(){
+  if(lens==="personal"){lens="shared";setMichaelBtn();renderAll();toast("Back to the shared view");return;}
+  openMichaelGate();
+}
+function openMichaelGate(){
+  const has=!!(S.security&&S.security.michaelPin);
+  document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px"><h3>${has?"Michael — enter password":"Set your Michael password"}</h3>
+    <div class="muted" style="font-size:12.5px;margin:-8px 0 14px">${has?"Unlock your private view (bills only you can see).":"Protect your private view with a password. You'll enter it to see your personal-only items."}</div>
+    <div class="field" style="margin-bottom:12px"><label>Password</label><input id="mg_pass" class="inp" type="password" autocomplete="off"></div>
+    ${has?"":`<div class="field" style="margin-bottom:12px"><label>Confirm password</label><input id="mg_conf" class="inp" type="password" autocomplete="off"></div>`}
+    <div class="auth-msg" id="mg_msg"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="submitMichael(${has})">${has?"Unlock":"Set & unlock"}</button></div>
+  </div></div>`;
+  setTimeout(()=>{const el=document.getElementById("mg_pass");if(el)el.focus();},50);
+}
+async function submitMichael(has){
+  const pass=document.getElementById("mg_pass").value;const msg=document.getElementById("mg_msg");
+  if(!pass||pass.length<4){msg.textContent="Use at least 4 characters";return;}
+  if(!has){
+    if(pass!==document.getElementById("mg_conf").value){msg.textContent="Passwords don't match";return;}
+    S.security=S.security||{};S.security.michaelPin=await sha256(pass);await saveState();
+    lens="personal";closeModal();setMichaelBtn();renderAll();toast("Personal view unlocked");
+    return;
+  }
+  const h=await sha256(pass);
+  if(h===S.security.michaelPin){lens="personal";closeModal();setMichaelBtn();renderAll();toast("Personal view unlocked");}
+  else{msg.textContent="Wrong password";}
+}
 function populateMonthSelect(keys){const sel=document.getElementById("monthSelect");sel.innerHTML=keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join("");if(!selMonth||!keys.includes(selMonth))selMonth=keys[0];sel.value=selMonth;}
 function onMonthChange(){selMonth=document.getElementById("monthSelect").value;renderAll();}
 function drillToMonth(key){selMonth=key;const ms=document.getElementById("monthSelect");if(ms)ms.value=key;go("tracker");}
@@ -1079,7 +1184,7 @@ function renderTracker(events){
   const mEvents=events.filter(e=>e.monthKey===selMonth);
   const expenses=mEvents.filter(e=>e.type==="Expense");
   const incomes=mEvents.filter(e=>e.type==="Income");
-  const adhoc=(S.adhoc[selMonth]||[]);
+  const adhoc=(S.adhoc[selMonth]||[]).filter(x=>lens==="personal"||!x.private);
   const opening=monthOpening(events,selMonth,keys);
   const incomeTotal=incomes.reduce((s,e)=>s+e.amount,0);
 
@@ -1148,13 +1253,15 @@ function renderTracker(events){
   const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
+  const sharedIds=new Set([...(S.bills||[]),...(S.income||[])].filter(x=>x.private).map(x=>x.id));
+  const shChip=on=>on?` <span class="pill shared">Private</span>`:"";
   incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${shortD(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
   expenses.forEach(e=>{
     const a=getActual(e.occId)||{paid:false,actual:null,by:null};
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}${shChip(sharedIds.has(e.itemId))}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
@@ -1355,12 +1462,13 @@ function renderBills(){
   // prune selections that no longer exist
   sel.forEach(id=>{if(!S.bills.some(b=>b.id===id))sel.delete(id);});
   renderBulkBar();
-  if(!S.bills.length){t.innerHTML=`<tbody><tr><td class="empty">No bills yet.</td></tr></tbody>`;return;}
-  const allSel=S.bills.every(b=>sel.has(b.id));
-  const rows=S.bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
+  const bills=S.bills.filter(b=>lens==="personal"||!b.private);
+  if(!bills.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared bills in the main view.':'No bills yet.'}</td></tr></tbody>`;return;}
+  const allSel=bills.every(b=>sel.has(b.id));
+  const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
     <td><input class="chk" type="checkbox" ${sel.has(b.id)?'checked':''} onchange="toggleSel('${b.id}',this.checked)"></td>
     <td><input class="chk" type="checkbox" title="Active" ${b.active?'checked':''} onchange="toggleActive('bill','${b.id}',this.checked)"></td>
-    <td>${esc(b.name)}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
+    <td>${esc(b.name)}${b.private?' <span class="pill shared">Private</span>':''}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
     <td>${esc(b.category)}</td><td class="r num">${fmt$(toNum(b.amount))}</td>
     <td>${esc(b.frequency)}${b.days?` · ${esc(b.days)}`:""}</td>
     <td>${b.endDate?fmtDate(parseDate(b.endDate)):"—"}</td>
@@ -1384,16 +1492,19 @@ function renderBulkBar(){
     <span class="sep"></span>
     <button class="iconbtn" onclick="bulkActive(true)">Activate</button>
     <button class="iconbtn" onclick="bulkActive(false)">Pause</button>
+    <button class="iconbtn" onclick="bulkPrivate(true)">Make private</button>
+    <button class="iconbtn" onclick="bulkPrivate(false)">Make shared</button>
     <button class="iconbtn del" onclick="bulkDelete()">Delete</button>
     <button class="iconbtn" onclick="sel.clear();renderBills()" style="margin-left:auto">Clear selection</button>
   </div>`;
 }
+function bulkPrivate(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b.private=v;});saveState();renderBills();toast(`${v?'Made private':'Made shared'}: ${n} bills`);}
 function bulkSet(field,val){if(!val)return;const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b[field]=val;});saveState();renderBills();toast(`Updated ${n} bills`);}
 function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
 function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 
-function renderIncome(){const t=document.getElementById("incomeTable");if(!S.income.length){t.innerHTML=`<tbody><tr><td class="empty">No income yet.</td></tr></tbody>`;return;}
-  const rows=S.income.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
+function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(i=>lens==="personal"||!i.private);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared income in the main view.':'No income yet.'}</td></tr></tbody>`;return;}
+  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}${i.private?' <span class="pill shared">Private</span>':''}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
   t.innerHTML=`<thead><tr><th style="width:30px">On</th><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
 function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
 function delItem(kind,id){if(!confirm("Delete this item?"))return;if(kind==="bill")S.bills=S.bills.filter(x=>x.id!==id);else S.income=S.income.filter(x=>x.id!==id);saveState();renderAll();}
@@ -1416,13 +1527,15 @@ function openItem(kind,id){
       <div class="field"><label>End date <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="f_end" class="inp" type="date" value="${it.endDate||''}"></div>
       <div class="field" style="grid-column:span 2"><label>Notes</label><input id="f_notes" class="inp" value="${esc(it.notes||'')}"></div>
     </div>
+    <label class="sharedtoggle"><input id="f_private" type="checkbox" class="chk" ${it.private?'checked':(lens==='personal'&&!id?'checked':'')}><span>Private — only in my Michael tab <span class="muted" style="font-weight:400">— leave off to keep it in the shared view Sarah sees</span></span></label>
     <div class="muted" style="font-size:11.5px;margin-top:12px">Weekly/biweekly repeat from the anchor date. Monthly-type frequencies use the due day(s); semimonthly defaults to the 1st &amp; 15th; bimonthly = every other month.</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveItem('${kind}','${id||''}')">Save</button></div>
   </div></div>`;
 }
 function closeModal(){document.getElementById("modalRoot").innerHTML="";}
 function saveItem(kind,id){const isBill=kind==="bill";const v=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};const name=v("f_name");if(!name){toast("Give it a name");return;}
-  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes")};
+  const privEl=document.getElementById("f_private");
+  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),private:!!(privEl&&privEl.checked)};
   if(isBill){obj.name=name;obj.category=v("f_category")||obj.group;}else obj.source=name;
   const arr=isBill?S.bills:S.income;if(id){const it=arr.find(x=>x.id===id);Object.assign(it,obj);}else{obj.id=uid();arr.push(obj);}
   saveState();closeModal();renderAll();toast("Saved");}
@@ -1872,19 +1985,26 @@ function proceedLocal(){
 async function afterSignedIn(){
   setSync("syncing");
   setLoad&&setLoad("Loading your ledger…");
+  setModeFromUser();
+  lens="shared";
+  const mt=document.getElementById("modeTag");if(mt){mt.className="modelabel "+LEDGER_MODE;mt.textContent=LEDGER_MODE==="shared"?"Shared":"Personal";}
+  const kick=document.querySelector(".brand .kick");if(kick)kick.textContent=LEDGER_MODE==="shared"?"Shared with Sarah":"Your money, month by month";
+  setMichaelBtn();
   lastCloudError="";
   const cloud=await cloudPull();
   if(lastCloudError){            // pull errored (tables missing / network / key)
     return denyCloud();
   }
   if(cloud){ S=cloud; runMigrations(); }
-  else{                          // no shared row yet — try to create it (proves membership)
+  else{                          // no row yet — create it (proves membership)
+    if(LEDGER_MODE==="shared") S=seedEmpty();   // partner starts empty, not from sample data
     runMigrations();
     const ok=await cloudPush();
     if(!ok) return denyCloud();
   }
   applyTheme(S.settings.theme||"light");
   await saveState();
+  if(LEDGER_MODE==="personal"){await reconcileFromShared(true);await publishShared();}
   document.getElementById("auth").style.display="none";
   document.getElementById("loader").style.display="none";
   setSync("synced");
@@ -1906,6 +2026,7 @@ async function denyCloud(){
   }catch(e){}
   const vt=document.getElementById("verTag");if(vt)vt.textContent="v"+APP_VERSION;
   const mt=document.getElementById("modeTag");if(mt){mt.className="modelabel "+LEDGER_MODE;mt.textContent=LEDGER_MODE==="shared"?"Shared":"Personal";}
+  lens="shared";setMichaelBtn();
   const kick=document.querySelector(".brand .kick");if(kick)kick.textContent=LEDGER_MODE==="shared"?"Shared with Sarah":"Your money, month by month";
   // keep devices consistent: re-pull latest whenever the app regains focus
   let lastRefresh=0;
