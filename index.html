@@ -676,7 +676,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.5.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -822,13 +822,13 @@ async function refreshFromCloud(silent){
   await reconcileFromShared(silent);
 }
 
-/* ---- Shared subset: publish shared-tagged items to Sarah; merge her changes back ---- */
+/* ---- Shared subset: publish only items marked Shared; merge Sarah's changes back ---- */
 let sharePubTimer=null;
-function hasSharedItems(){return (S.bills||[]).some(b=>!b.private)||(S.income||[]).some(i=>!i.private)||Object.keys(S.adhoc||{}).some(mk=>(S.adhoc[mk]||[]).some(x=>!x.private))||((S.wedding&&S.wedding.items||[]).length>0);}
-function sharedItemIdSet(){const s=new Set();(S.bills||[]).forEach(b=>{if(!b.private)s.add(b.id);});(S.income||[]).forEach(i=>{if(!i.private)s.add(i.id);});return s;}
+function isShared(x){return !!x.shared && !x.private;}
+function sharedItemIdSet(){const s=new Set();(S.bills||[]).forEach(b=>{if(isShared(b))s.add(b.id);});(S.income||[]).forEach(i=>{if(isShared(i))s.add(i.id);});return s;}
 function buildSharedPayload(){
   const ids=sharedItemIdSet();
-  const sAdhoc={};Object.keys(S.adhoc||{}).forEach(mk=>{const arr=(S.adhoc[mk]||[]).filter(x=>!x.private);if(arr.length)sAdhoc[mk]=arr;});
+  const sAdhoc={};Object.keys(S.adhoc||{}).forEach(mk=>{const arr=(S.adhoc[mk]||[]).filter(x=>isShared(x));if(arr.length)sAdhoc[mk]=arr;});
   const sActuals={};Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};const out={};Object.keys(m).forEach(occId=>{if(ids.has(occId.split("__")[0]))out[occId]=m[occId];});if(Object.keys(out).length)sActuals[mk]=out;});
   return {
     ownerId: sbUser?sbUser.id:null, updatedAt: Date.now(),
@@ -836,30 +836,36 @@ function buildSharedPayload(){
     migrations:{endDate2027:true,noEndAnd2yr:true}, security:{pinHash:null},
     history:{months:6,items:[],budgets:{},values:{}},
     wedding: S.wedding||{budget:0,items:[]},
-    bills:(S.bills||[]).filter(b=>!b.private).map(b=>Object.assign({},b)),
-    income:(S.income||[]).filter(i=>!i.private).map(i=>Object.assign({},i)),
-    actuals:sActuals, adhoc:sAdhoc, order:{}
+    bills:(S.bills||[]).filter(b=>isShared(b)).map(b=>Object.assign({},b)),
+    income:(S.income||[]).filter(i=>isShared(i)).map(i=>Object.assign({},i)),
+    actuals:sActuals, adhoc:sAdhoc, order:{},
+    deletedShared: S.deletedShared||{}
   };
 }
 function mergeSharedBack(Sh,updateExisting){
   if(!Sh) return false; let changed=false;
-  // 1) bills / income Sarah added or edited on the shared side
+  // apply deletions from the shared side (tombstones), both directions
+  const tomb=Object.assign({}, S.deletedShared||{}, Sh.deletedShared||{});
+  if(JSON.stringify(tomb)!==JSON.stringify(S.deletedShared||{})){S.deletedShared=tomb;changed=true;}
+  const dead=id=>!!tomb[id];
   ["bills","income"].forEach(coll=>{
+    // remove anything tombstoned
+    const before=(S[coll]||[]).length;
+    S[coll]=(S[coll]||[]).filter(x=>!(isShared(x)&&dead(x.id)));
+    if(S[coll].length!==before)changed=true;
     (Sh[coll]||[]).forEach(inc=>{
+      if(dead(inc.id))return;
       const mine=(S[coll]||[]).find(x=>x.id===inc.id);
-      if(!mine){S[coll].push(Object.assign({},inc,{private:false}));changed=true;}
-      else if(updateExisting){const keep={private:mine.private};const before=JSON.stringify(mine);Object.assign(mine,inc,keep);if(JSON.stringify(mine)!==before)changed=true;}
+      if(!mine){S[coll].push(Object.assign({},inc,{shared:true,private:false}));changed=true;}
+      else if(updateExisting){const keep={private:mine.private,shared:true};const b=JSON.stringify(mine);Object.assign(mine,inc,keep);if(JSON.stringify(mine)!==b)changed=true;}
     });
   });
-  // 2) tracker state (paid / actual / payer / pay date) for shared occurrences
   Object.keys(Sh.actuals||{}).forEach(mk=>{const m=Sh.actuals[mk]||{};S.actuals[mk]=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const cur=S.actuals[mk][occId]||{};const inc=m[occId]||{};const merged=Object.assign({},cur);
     if(inc.paid&&!cur.paid){merged.paid=true;merged.by=inc.by||cur.by;changed=true;}
     if((inc.actual!=null&&inc.actual!=="")&&(cur.actual==null||cur.actual==="")){merged.actual=inc.actual;changed=true;}
     if(inc.payDate&&!cur.payDate){merged.payDate=inc.payDate;changed=true;}
     S.actuals[mk][occId]=merged;});});
-  // 3) unplanned shared expenses Sarah added
-  Object.keys(Sh.adhoc||{}).forEach(mk=>{(Sh.adhoc[mk]||[]).forEach(x=>{S.adhoc[mk]=S.adhoc[mk]||[];if(!S.adhoc[mk].some(y=>y.id===x.id)){S.adhoc[mk].push(Object.assign({},x,{private:false}));changed=true;}});});
-  // 4) wedding: import new items + reflect deposits
+  Object.keys(Sh.adhoc||{}).forEach(mk=>{(Sh.adhoc[mk]||[]).forEach(x=>{if(dead(x.id))return;S.adhoc[mk]=S.adhoc[mk]||[];if(!S.adhoc[mk].some(y=>y.id===x.id)){S.adhoc[mk].push(Object.assign({},x,{shared:true,private:false}));changed=true;}});});
   if(Sh.wedding&&Array.isArray(Sh.wedding.items)){S.wedding=S.wedding||{budget:0,items:[]};Sh.wedding.items.forEach(si=>{const mine=(S.wedding.items||[]).find(w=>w.id===si.id);
     if(!mine){S.wedding.items.push(Object.assign({},si));changed=true;}
     else if(toNum(si.paid)>toNum(mine.paid)){mine.paid=toNum(si.paid);changed=true;}});}
@@ -879,7 +885,6 @@ function publishSharedDebounced(){
 }
 async function publishShared(){
   if(LEDGER_MODE!=="personal"||!(cloudEnabled&&sbUser))return;
-  if(!hasSharedItems())return;
   try{
     const {data}=await sb.from("household_ledger").select("data").eq("id","shared").maybeSingle();
     const Sh=data?data.data:null;
@@ -1266,15 +1271,16 @@ function renderTracker(events){
   const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
-  const sharedIds=new Set([...(S.bills||[]),...(S.income||[])].filter(x=>x.private).map(x=>x.id));
-  const shChip=on=>on?` <span class="pill shared">Private</span>`:"";
+  const privIds=new Set([...(S.bills||[]),...(S.income||[])].filter(x=>x.private).map(x=>x.id));
+  const shrIds=new Set([...(S.bills||[]),...(S.income||[])].filter(x=>x.shared&&!x.private).map(x=>x.id));
+  const shChip=id=>privIds.has(id)?` <span class="pill shared">Private</span>`:(shrIds.has(id)?` <span class="pill savings">Shared</span>`:"");
   incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${shortD(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
   expenses.forEach(e=>{
     const a=getActual(e.occId)||{paid:false,actual:null,by:null};
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}${shChip(sharedIds.has(e.itemId))}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}${shChip(e.itemId)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
@@ -1401,7 +1407,7 @@ function saveAdhocRecord(id){
 }
 function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:"",paid:false});saveState();renderTracker(buildForecast());}
 function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date"||field==="paid")renderTracker(buildForecast());}
-function delAdhoc(id){S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);saveState();renderTracker(buildForecast());}
+function delAdhoc(id){const it=(S.adhoc[selMonth]||[]).find(x=>x.id===id);const wasShared=it&&(isShared(it)||LEDGER_MODE==="shared");S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);if(wasShared){S.deletedShared=S.deletedShared||{};S.deletedShared[id]=Date.now();}saveState();renderTracker(buildForecast());}
 
 /* ============================== PAYCHECKS ============================== */
 function payPeriods(events){
@@ -1482,7 +1488,7 @@ function renderBills(){
   const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
     <td><input class="chk" type="checkbox" ${sel.has(b.id)?'checked':''} onchange="toggleSel('${b.id}',this.checked)"></td>
     <td><input class="chk" type="checkbox" title="Active" ${b.active?'checked':''} onchange="toggleActive('bill','${b.id}',this.checked)"></td>
-    <td>${esc(b.name)}${b.private?' <span class="pill shared">Private</span>':''}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
+    <td>${esc(b.name)}${b.private?' <span class="pill shared">Private</span>':(b.shared?' <span class="pill savings">Shared</span>':'')}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
     <td>${esc(b.category)}</td><td class="r num">${fmt$(toNum(b.amount))}</td>
     <td>${esc(b.frequency)}${b.days?` · ${esc(b.days)}`:""}</td>
     <td>${b.endDate?fmtDate(parseDate(b.endDate)):"—"}</td>
@@ -1512,16 +1518,16 @@ function renderBulkBar(){
     <button class="iconbtn" onclick="sel.clear();renderBills()" style="margin-left:auto">Clear selection</button>
   </div>`;
 }
-function bulkPrivate(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b.private=v;});saveState();renderBills();toast(`${v?'Made private':'Made shared'}: ${n} bills`);}
+function bulkPrivate(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id)){if(v){b.private=true;b.shared=false;}else{b.shared=true;b.private=false;}}});saveState();renderBills();toast(`${v?'Made private':'Made shared'}: ${n} bills`);}
+function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.deletedShared=S.deletedShared||{};S.bills.forEach(b=>{if(sel.has(b.id)&&(isShared(b)||LEDGER_MODE==="shared"))S.deletedShared[b.id]=Date.now();});S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 function bulkSet(field,val){if(!val)return;const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b[field]=val;});saveState();renderBills();toast(`Updated ${n} bills`);}
 function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
-function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 
 function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(i=>lens==="personal"||!i.private);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared income yet — add one.':'No income yet.'}</td></tr></tbody>`;return;}
-  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}${i.private?' <span class="pill shared">Private</span>':''}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
+  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}${i.private?' <span class="pill shared">Private</span>':(i.shared?' <span class="pill savings">Shared</span>':'')}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
   t.innerHTML=`<thead><tr><th style="width:30px">On</th><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
 function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
-function delItem(kind,id){if(!confirm("Delete this item?"))return;if(kind==="bill")S.bills=S.bills.filter(x=>x.id!==id);else S.income=S.income.filter(x=>x.id!==id);saveState();renderAll();}
+function delItem(kind,id){if(!confirm("Delete this item?"))return;const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);const wasShared=it&&(isShared(it)||LEDGER_MODE==="shared");if(kind==="bill")S.bills=S.bills.filter(x=>x.id!==id);else S.income=S.income.filter(x=>x.id!==id);if(wasShared){S.deletedShared=S.deletedShared||{};S.deletedShared[id]=Date.now();}saveState();renderAll();}
 
 const FREQS=["One-time","Weekly","Biweekly","Semimonthly","Monthly","Bimonthly","Quarterly","Annually"];
 const BILL_GROUPS=["Bills","Debt","Savings","Subscriptions","Other"];const INCOME_GROUPS=["Income","Other"];
@@ -1541,15 +1547,21 @@ function openItem(kind,id){
       <div class="field"><label>End date <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="f_end" class="inp" type="date" value="${it.endDate||''}"></div>
       <div class="field" style="grid-column:span 2"><label>Notes</label><input id="f_notes" class="inp" value="${esc(it.notes||'')}"></div>
     </div>
-    <label class="sharedtoggle"><input id="f_private" type="checkbox" class="chk" ${it.private?'checked':(lens==='personal'&&!id?'checked':'')}><span>Private — only in my Michael tab <span class="muted" style="font-weight:400">— leave off to keep it in the shared view Sarah sees</span></span></label>
+    <div class="field" style="grid-column:span 2;margin-top:6px"><label>Where does this go?</label>
+      <select id="f_vis" class="inp">
+        <option value="me" ${(!it.shared&&!it.private)?'selected':''}>Just me (my budget only)</option>
+        <option value="shared" ${it.shared?'selected':''}>Shared with Sarah (adds to the shared version)</option>
+        <option value="private" ${it.private?'selected':''}>Private (only in my Michael tab)</option>
+      </select>
+    </div>
     <div class="muted" style="font-size:11.5px;margin-top:12px">Weekly/biweekly repeat from the anchor date. Monthly-type frequencies use the due day(s); semimonthly defaults to the 1st &amp; 15th; bimonthly = every other month.</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveItem('${kind}','${id||''}')">Save</button></div>
   </div></div>`;
 }
 function closeModal(){document.getElementById("modalRoot").innerHTML="";}
 function saveItem(kind,id){const isBill=kind==="bill";const v=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};const name=v("f_name");if(!name){toast("Give it a name");return;}
-  const privEl=document.getElementById("f_private");
-  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),private:!!(privEl&&privEl.checked)};
+  const vis=(document.getElementById("f_vis")||{}).value||"me";
+  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),shared:vis==="shared",private:vis==="private"};
   if(isBill){obj.name=name;obj.category=v("f_category")||obj.group;}else obj.source=name;
   const arr=isBill?S.bills:S.income;if(id){const it=arr.find(x=>x.id===id);Object.assign(it,obj);}else{obj.id=uid();arr.push(obj);}
   saveState();closeModal();renderAll();toast("Saved");}
