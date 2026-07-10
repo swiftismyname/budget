@@ -584,8 +584,9 @@
   <section id="view-bills" class="hide">
     <div class="sec-h">
       <div><h2>Bills &amp; outflows</h2><div class="desc">Recurring expenses, debt and savings. Select a few to edit them together.</div></div>
-      <button class="btn" onclick="openItem('bill')">+ Add bill</button>
+      <button class="btn" id="addBillBtn" onclick="openItem('bill')">+ Add bill</button>
     </div>
+    <div id="billsNote" class="desc" style="margin:-4px 0 12px;color:var(--lav)"></div>
     <div id="bulkBar"></div>
     <div class="panel scrollx"><table id="billsTable"></table></div>
   </section>
@@ -594,7 +595,7 @@
   <section id="view-income" class="hide">
     <div class="sec-h">
       <div><h2>Income</h2><div class="desc">Paychecks and other inflows.</div></div>
-      <button class="btn" onclick="openItem('income')">+ Add income</button>
+      <button class="btn" id="addIncomeBtn" onclick="openItem('income')">+ Add income</button>
     </div>
     <div class="panel scrollx"><table id="incomeTable"></table></div>
   </section>
@@ -675,7 +676,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.4.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -840,16 +841,28 @@ function buildSharedPayload(){
     actuals:sActuals, adhoc:sAdhoc, order:{}
   };
 }
-function mergeSharedBack(Sh){
+function mergeSharedBack(Sh,updateExisting){
   if(!Sh) return false; let changed=false;
+  // 1) bills / income Sarah added or edited on the shared side
+  ["bills","income"].forEach(coll=>{
+    (Sh[coll]||[]).forEach(inc=>{
+      const mine=(S[coll]||[]).find(x=>x.id===inc.id);
+      if(!mine){S[coll].push(Object.assign({},inc,{private:false}));changed=true;}
+      else if(updateExisting){const keep={private:mine.private};const before=JSON.stringify(mine);Object.assign(mine,inc,keep);if(JSON.stringify(mine)!==before)changed=true;}
+    });
+  });
+  // 2) tracker state (paid / actual / payer / pay date) for shared occurrences
   Object.keys(Sh.actuals||{}).forEach(mk=>{const m=Sh.actuals[mk]||{};S.actuals[mk]=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const cur=S.actuals[mk][occId]||{};const inc=m[occId]||{};const merged=Object.assign({},cur);
     if(inc.paid&&!cur.paid){merged.paid=true;merged.by=inc.by||cur.by;changed=true;}
     if((inc.actual!=null&&inc.actual!=="")&&(cur.actual==null||cur.actual==="")){merged.actual=inc.actual;changed=true;}
     if(inc.payDate&&!cur.payDate){merged.payDate=inc.payDate;changed=true;}
     S.actuals[mk][occId]=merged;});});
+  // 3) unplanned shared expenses Sarah added
   Object.keys(Sh.adhoc||{}).forEach(mk=>{(Sh.adhoc[mk]||[]).forEach(x=>{S.adhoc[mk]=S.adhoc[mk]||[];if(!S.adhoc[mk].some(y=>y.id===x.id)){S.adhoc[mk].push(Object.assign({},x,{private:false}));changed=true;}});});
-  // reflect Sarah's wedding deposits back
-  if(Sh.wedding&&Array.isArray(Sh.wedding.items)){Sh.wedding.items.forEach(si=>{const mine=(S.wedding.items||[]).find(w=>w.id===si.id);if(mine){if(toNum(si.paid)>toNum(mine.paid)){mine.paid=toNum(si.paid);changed=true;}}});}
+  // 4) wedding: import new items + reflect deposits
+  if(Sh.wedding&&Array.isArray(Sh.wedding.items)){S.wedding=S.wedding||{budget:0,items:[]};Sh.wedding.items.forEach(si=>{const mine=(S.wedding.items||[]).find(w=>w.id===si.id);
+    if(!mine){S.wedding.items.push(Object.assign({},si));changed=true;}
+    else if(toNum(si.paid)>toNum(mine.paid)){mine.paid=toNum(si.paid);changed=true;}});}
   return changed;
 }
 async function reconcileFromShared(silent){
@@ -857,7 +870,7 @@ async function reconcileFromShared(silent){
   try{
     const {data}=await sb.from("household_ledger").select("data").eq("id","shared").maybeSingle();
     const Sh=data?data.data:null;
-    if(mergeSharedBack(Sh)){await localSet(S);renderAll();if(!silent)toast("Pulled Sarah's updates in");}
+    if(mergeSharedBack(Sh,true)){await localSet(S);renderAll();if(!silent)toast("Pulled Sarah's updates in");}
   }catch(e){console.error("reconcile shared failed",e);}
 }
 function publishSharedDebounced(){
@@ -1459,11 +1472,12 @@ function drawPay(periods,cur){
 function grpClass(g){g=String(g||"").toLowerCase();return g==="debt"?"debt":g==="savings"?"savings":g==="income"?"income":g==="subscriptions"?"subs":g==="other"?"other":"bills";}
 function renderBills(){
   const t=document.getElementById("billsTable");
+  const note=document.getElementById("billsNote");if(note)note.textContent=(LEDGER_MODE==="shared")?"Shared household bills — either of you can add or edit these.":"";
   // prune selections that no longer exist
   sel.forEach(id=>{if(!S.bills.some(b=>b.id===id))sel.delete(id);});
   renderBulkBar();
   const bills=S.bills.filter(b=>lens==="personal"||!b.private);
-  if(!bills.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared bills in the main view.':'No bills yet.'}</td></tr></tbody>`;return;}
+  if(!bills.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared bills yet — add one.':'No bills yet.'}</td></tr></tbody>`;return;}
   const allSel=bills.every(b=>sel.has(b.id));
   const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
     <td><input class="chk" type="checkbox" ${sel.has(b.id)?'checked':''} onchange="toggleSel('${b.id}',this.checked)"></td>
@@ -1503,7 +1517,7 @@ function bulkSet(field,val){if(!val)return;const n=sel.size;S.bills.forEach(b=>{
 function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
 function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 
-function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(i=>lens==="personal"||!i.private);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared income in the main view.':'No income yet.'}</td></tr></tbody>`;return;}
+function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(i=>lens==="personal"||!i.private);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">${lens==="shared"?'No shared income yet — add one.':'No income yet.'}</td></tr></tbody>`;return;}
   const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}${i.private?' <span class="pill shared">Private</span>':''}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
   t.innerHTML=`<thead><tr><th style="width:30px">On</th><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
 function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
@@ -1840,6 +1854,8 @@ let lockMode="enter", entry="", firstEntry="";
 async function sha256(s){const b=new TextEncoder().encode("ledger:"+s);const h=await crypto.subtle.digest("SHA-256",b);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("");}
 function initLock(){
   S.security=S.security||{pinHash:null};
+  // Signed in with email + password? No PIN needed — go straight in.
+  if(sbUser){document.getElementById("lock").style.display="none";document.getElementById("app").style.visibility="visible";go(activeTab||"dashboard");return;}
   document.getElementById("app").style.visibility="hidden";
   const lock=document.getElementById("lock");lock.style.display="flex";
   entry="";firstEntry="";
