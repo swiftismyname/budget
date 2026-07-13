@@ -452,7 +452,8 @@
     <button data-tab="history" onclick="go('history')">History</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
     <button data-tab="income" onclick="go('income')">Income</button>
-    <button data-tab="sarah" onclick="go('sarah')">Sarah</button>
+    <button data-tab="sarah" id="navSarah" onclick="go('sarah')">Sarah</button>
+    <button data-tab="wedding" id="navWedding" onclick="go('wedding')" style="display:none">Wedding</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
   </nav>
 
@@ -461,7 +462,8 @@
     <button data-tab="dashboard" class="active" onclick="go('dashboard')"><span class="bn-ic">◇</span><span>Home</span></button>
     <button data-tab="tracker" onclick="go('tracker')"><span class="bn-ic">✓</span><span>Month</span></button>
     <button data-tab="paychecks" onclick="go('paychecks')"><span class="bn-ic">❙❙</span><span>Pay</span></button>
-    <button data-tab="sarah" onclick="go('sarah')"><span class="bn-ic">♥</span><span>Sarah</span></button>
+    <button data-tab="sarah" id="bnSarah" onclick="go('sarah')"><span class="bn-ic">♥</span><span>Sarah</span></button>
+    <button data-tab="wedding" id="bnWedding" onclick="go('wedding')" style="display:none"><span class="bn-ic">♥</span><span>Wedding</span></button>
     <button onclick="openMore()"><span class="bn-ic">⋯</span><span>More</span></button>
   </nav>
 
@@ -475,7 +477,8 @@
         <button onclick="goMore('history')"><span>History</span></button>
         <button onclick="goMore('bills')"><span>Bills</span></button>
         <button onclick="goMore('income')"><span>Income</span></button>
-        <button onclick="goMore('sarah')"><span>Sarah</span></button>
+        <button id="moreSarah" onclick="goMore('sarah')"><span>Sarah</span></button>
+        <button id="moreWedding" onclick="goMore('wedding')" style="display:none"><span>Wedding</span></button>
         <button onclick="goMore('dashboard')"><span>Dashboard</span></button>
         <button onclick="goMore('settings')"><span>Settings</span></button>
       </div>
@@ -675,7 +678,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.1.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -953,6 +956,13 @@ function go(tab){activeTab=tab;
 function openMore(){document.getElementById("moreSheet").classList.add("open");}
 function closeMore(){document.getElementById("moreSheet").classList.remove("open");}
 function goMore(tab){closeMore();go(tab);}
+function applyBuildNav(){
+  const shared=(LEDGER_MODE==="shared");
+  const show=(id,on)=>{const e=document.getElementById(id);if(e)e.style.display=on?"":"none";};
+  // Shared build: Wedding tab. Personal build: Sarah tab.
+  show("navWedding",shared); show("bnWedding",shared); show("moreWedding",shared);
+  show("navSarah",!shared); show("bnSarah",!shared); show("moreSarah",!shared);
+}
 function populateMonthSelect(keys){const sel=document.getElementById("monthSelect");sel.innerHTML=keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join("");if(!selMonth||!keys.includes(selMonth))selMonth=keys[0];sel.value=selMonth;}
 function onMonthChange(){selMonth=document.getElementById("monthSelect").value;renderAll();}
 function drillToMonth(key){selMonth=key;const ms=document.getElementById("monthSelect");if(ms)ms.value=key;go("tracker");}
@@ -963,6 +973,7 @@ function renderAll(){const events=buildForecast();const keys=monthKeys(events);p
   if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);}
   if(activeTab==="history")renderHistory();
   if(activeTab==="sarah")renderSarah(events);
+  if(activeTab==="wedding")renderWedding();
   if(activeTab==="bills")renderBills();
   if(activeTab==="income")renderIncome();
   if(activeTab==="settings")fillSettings();}
@@ -1265,6 +1276,7 @@ function openTrackRecord(id){
         <div class="field"><label>Paid by</label><select id="tr_by" class="inp"><option value="">— not paid —</option><option value="me" ${a.paid&&a.by!=="sarah"?"selected":""}>You (paid)</option><option value="sarah" ${a.paid&&a.by==="sarah"?"selected":""}>Sarah (paid)</option></select></div>
         <div class="field" style="grid-column:span 2"><label>Notes</label><input id="tr_notes" class="inp" value="${esc(a.notes||"")}"></div>
       </div>
+      ${LEDGER_MODE==="personal"?`<label class="sharedtoggle"><input id="tr_wed" type="checkbox" class="chk" ${a.wedding?'checked':''}><span>For the wedding <span class="muted" style="font-weight:400">— flags this (esp. money given to Sarah) as a wedding expense on the Sarah tab</span></span></label>`:''}
       <div class="muted" style="font-size:11.5px;margin-top:10px">The due date comes from the bill. Change the pay date to schedule when you'll actually pay it — the list re-sorts by pay date, and "due …" still shows the real deadline.</div>
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal();openItem('bill','${ev.itemId}')">Edit the bill…</button><button class="btn" onclick="saveTrackRecord('${id}')">Save</button></div>
     </div></div>`;
@@ -1277,18 +1289,21 @@ function openTrackRecord(id){
         <div class="field"><label>Category</label><input id="ar_category" class="inp" value="${esc(ad.category||'')}"></div>
         <div class="field"><label>Paid by</label><select id="ar_by" class="inp"><option value="">— not paid —</option><option value="me" ${ad.paid&&ad.by!=="sarah"?"selected":""}>You (paid)</option><option value="sarah" ${ad.paid&&ad.by==="sarah"?"selected":""}>Sarah (paid)</option></select></div>
       </div>
+      ${LEDGER_MODE==="personal"?`<label class="sharedtoggle"><input id="ar_wed" type="checkbox" class="chk" ${ad.wedding?'checked':''}><span>For the wedding <span class="muted" style="font-weight:400">— flags this as a wedding expense on the Sarah tab</span></span></label>`:''}
       <div class="modal-actions"><button class="btn danger" onclick="delAdhoc('${ad.id}');closeModal()">Delete</button><button class="btn" onclick="saveAdhocRecord('${ad.id}')">Save</button></div>
     </div></div>`;
   }
 }
 function saveTrackRecord(id){
   const by=document.getElementById("tr_by").value;
-  setActual(id,{payDate:document.getElementById("tr_pay").value,actual:document.getElementById("tr_actual").value,notes:document.getElementById("tr_notes").value.trim(),paid:!!by,by:by==="sarah"?"sarah":(by?"me":null)});
+  const wedEl=document.getElementById("tr_wed");
+  setActual(id,{payDate:document.getElementById("tr_pay").value,actual:document.getElementById("tr_actual").value,notes:document.getElementById("tr_notes").value.trim(),paid:!!by,by:by==="sarah"?"sarah":(by?"me":null),wedding:!!(wedEl&&wedEl.checked)});
   closeModal();renderTracker(buildForecast());toast("Saved");
 }
 function saveAdhocRecord(id){
   const it=(S.adhoc[selMonth]||[]).find(x=>x.id===id);if(!it)return;
   it.date=document.getElementById("ar_date").value;it.amount=toNum(document.getElementById("ar_amount").value);it.name=document.getElementById("ar_name").value.trim();it.category=document.getElementById("ar_category").value.trim();
+  const wedEl=document.getElementById("ar_wed");it.wedding=!!(wedEl&&wedEl.checked);
   const by=document.getElementById("ar_by").value;it.paid=!!by;it.by=by==="sarah"?"sarah":(by?"me":null);
   saveState();closeModal();renderTracker(buildForecast());toast("Saved");
 }
@@ -1707,23 +1722,24 @@ function renderSarah(events){
   events=events||buildForecast();
   const byId={};events.forEach(e=>{byId[e.occId]=e;});
   const rows=[];
-  Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const a=m[occId];if(a&&a.by==="sarah"){const e=byId[occId];if(e)rows.push({date:e.date,name:e.name,category:e.category,amount:(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount,month:mk,paid:!!a.paid});}});});
-  Object.keys(S.adhoc||{}).forEach(mk=>{(S.adhoc[mk]||[]).forEach(x=>{if(x.by==="sarah")rows.push({date:parseDate(x.date)||parseDate(mk+"-15"),name:x.name||"Unplanned",category:x.category||"Unplanned",amount:toNum(x.amount),month:mk,paid:!!x.paid});});});
+  Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const a=m[occId];if(a&&a.by==="sarah"){const e=byId[occId];if(e)rows.push({date:e.date,name:e.name,category:e.category,amount:(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount,month:mk,paid:!!a.paid,wedding:!!a.wedding});}});});
+  Object.keys(S.adhoc||{}).forEach(mk=>{(S.adhoc[mk]||[]).forEach(x=>{if(x.by==="sarah")rows.push({date:parseDate(x.date)||parseDate(mk+"-15"),name:x.name||"Unplanned",category:x.category||"Unplanned",amount:toNum(x.amount),month:mk,paid:!!x.paid,wedding:!!x.wedding});});});
   rows.sort((a,b)=>b.date-a.date);
   const total=rows.reduce((s,r)=>s+r.amount,0);
+  const wedTotal=rows.filter(r=>r.wedding).reduce((s,r)=>s+r.amount,0);
 
   document.getElementById("sarahHero").innerHTML=`
     <div class="hero">
       <div class="hero-main">
         <div class="hero-lab">Total given to Sarah</div>
         <div class="hero-val num gold">${fmt$0(total)}</div>
-        <div class="hero-sub">${rows.length} item${rows.length===1?"":"s"} across ${new Set(rows.map(r=>r.month)).size} month${new Set(rows.map(r=>r.month)).size===1?"":"s"}</div>
+        <div class="hero-sub">${rows.length} item${rows.length===1?"":"s"} across ${new Set(rows.map(r=>r.month)).size} month${new Set(rows.map(r=>r.month)).size===1?"":"s"}${wedTotal>0?` · ${fmt$0(wedTotal)} for the wedding`:""}</div>
       </div>
     </div>`;
 
   const t=document.getElementById("sarahTable");
   if(!rows.length){t.innerHTML=`<tbody><tr><td class="empty">Nothing marked "Given to Sarah" yet. In This Month, select items and tap "Given to Sarah," or open a record and set Paid by → Sarah.</td></tr></tbody>`;return;}
-  const body=rows.map(r=>`<tr><td>${monthLabel(r.month)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td><span class="pill sarah">${esc(r.category)}</span></td><td class="r num">${fmt$(r.amount)}</td><td class="r">${r.paid?'<span class="pill savings">paid</span>':'<span class="pill other">pending</span>'}</td></tr>`).join("");
+  const body=rows.map(r=>`<tr><td>${monthLabel(r.month)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.name)}${r.wedding?' <span class="pill wed">Wedding</span>':''}</td><td><span class="pill sarah">${esc(r.category)}</span></td><td class="r num">${fmt$(r.amount)}</td><td class="r">${r.paid?'<span class="pill savings">paid</span>':'<span class="pill other">pending</span>'}</td></tr>`).join("");
   t.innerHTML=`<thead><tr><th>Month</th><th>Date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r">Status</th></tr></thead><tbody>${body}</tbody>`;
 }
 
@@ -1923,6 +1939,7 @@ async function denyCloud(){
 }
 (async function(){
   baseChartOpts();
+  applyBuildNav();
   detectPersist();
   // bring up the numeric keypad for money fields on mobile
   try{
