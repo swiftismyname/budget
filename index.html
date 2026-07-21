@@ -699,7 +699,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.3.1";
+const APP_VERSION = "4.4.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -1740,6 +1740,11 @@ function viewProposal(id){
 function removeProposal(id){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it.proposalFile="";it.proposalName="";it.proposalLink="";saveState();const st=document.getElementById("wr_propStatus");if(st)st.innerHTML=proposalStatusHtml(it);renderWedding();}
 
 /* ============================== SARAH ============================== */
+function sharedSetBy(mk,occId,v){
+  if(!v)setActualIn(mk,occId,{paid:false,by:null});
+  else setActualIn(mk,occId,{paid:true,by:v==="sarah"?"sarah":"me"});
+  renderAll();
+}
 function renderSarah(events){
   events=events||buildForecast();
   if(!selMonth){const ks=monthKeys(events);selMonth=ks[0]||null;}
@@ -1801,16 +1806,28 @@ function renderSarah(events){
   } else settle.innerHTML="";
 
   const sbt=document.getElementById("sharedBillsTable");
+  const note=document.getElementById("sharedBillsNote");if(note)note.textContent=`${monthLabel(selMonth)} — mark who covered each one; "Given to Sarah" logs it below`;
   if(!sharedBills.length){sbt.innerHTML=`<tbody><tr><td class="empty">No shared bills yet. Open any bill and tick "Shared with Sarah."</td></tr></tbody>`;}
   else{
-    const sbRows=sharedBills.map(b=>{const amt=toNum(b.amount);return `<tr>
-      <td><b>${esc(b.name)}</b>${b.wedding?' <span class="pill wed">Wedding</span>':''}</td>
-      <td><span class="pill ${grpClass(b.group)}">${esc(b.category)}</span></td>
-      <td>${esc(b.frequency)}</td>
-      <td class="r num">${fmt$(amt)}</td>
-      <td class="r num">${fmt$(amt/2)}</td>
-      <td class="r"><button class="iconbtn" onclick="openItem('bill','${b.id}')">Edit</button></td></tr>`;}).join("");
-    sbt.innerHTML=`<thead><tr><th>Bill</th><th>Category</th><th>Frequency</th><th class="r">Full</th><th class="r">Half</th><th class="r"></th></tr></thead><tbody>${sbRows}</tbody>`;
+    const occRows=[];
+    monthEvents.forEach(e=>{
+      const b=sharedBills.find(x=>x.id===e.itemId);if(!b)return;
+      const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);
+      const byVal=a.paid?(a.by==="sarah"?"sarah":"me"):"";
+      occRows.push(`<tr class="${a.paid?'paidrow':''}">
+        <td>${e.date.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</td>
+        <td><b>${esc(e.name)}</b>${b.wedding?' <span class="pill wed">Wedding</span>':''}${a.by==="sarah"?' <span class="pill sarah">Sarah</span>':''}</td>
+        <td class="r num">${fmt$(amt)}</td>
+        <td class="r num">${fmt$(amt/2)}</td>
+        <td class="r"><select class="inp" style="padding:6px 8px;width:150px" onchange="sharedSetBy('${e.monthKey}','${e.occId}',this.value)">
+          <option value="" ${byVal===""?"selected":""}>— not paid —</option>
+          <option value="me" ${byVal==="me"?"selected":""}>You paid</option>
+          <option value="sarah" ${byVal==="sarah"?"selected":""}>Given to Sarah</option>
+        </select></td>
+        <td class="r"><button class="iconbtn" onclick="openItem('bill','${e.itemId}')">Edit</button></td></tr>`);
+    });
+    if(!occRows.length){sbt.innerHTML=`<tbody><tr><td class="empty">No shared bills land in ${monthLabel(selMonth)} — check their due dates.</td></tr></tbody>`;}
+    else sbt.innerHTML=`<thead><tr><th>Due</th><th>Bill</th><th class="r">Full</th><th class="r">Half</th><th class="r">Paid by</th><th class="r"></th></tr></thead><tbody>${occRows.join("")}</tbody>`;
   }
 
   const t=document.getElementById("sarahTable");
