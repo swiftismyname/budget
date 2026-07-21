@@ -85,6 +85,11 @@
   .sharedtoggle .muted{font-size:12px}
   .pill.shared{background:var(--lav-soft);color:var(--lav)}
   .pill.wed{background:var(--gold-soft);color:var(--gold)}
+  .periodnav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .periodlbl{font-family:'Spline Sans Mono',monospace;font-size:13px;font-weight:600;min-width:150px;text-align:center}
+  .lenstog{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;box-shadow:var(--shadow-sm)}
+  .lenstog button{background:none;border:0;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;color:var(--text-dim);cursor:pointer;font-family:'Plus Jakarta Sans';white-space:nowrap}
+  .lenstog button.active{background:var(--accent-lav);color:#fff}
   .michaelbtn{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text-dim);cursor:pointer;box-shadow:var(--shadow-sm);font-family:'Plus Jakarta Sans'}
   .michaelbtn:hover{border-color:var(--accent-lav);color:var(--text)}
   .michaelbtn.on{background:var(--accent-lav);color:#fff;border-color:var(--accent-lav)}
@@ -434,6 +439,11 @@
       <div class="sub">A calm look at this month and the months ahead. <span id="verTag" class="vertag"></span><span id="modeTag"></span></div>
     </div>
     <div class="mast-right">
+      <div class="lenstog" id="lensTog" style="display:none">
+        <button class="active" data-lens="all" onclick="setLens('all')">All</button>
+        <button data-lens="shared" onclick="setLens('shared')">Shared</button>
+        <button data-lens="mine" onclick="setLens('mine')">Just mine</button>
+      </div>
       <button class="syncchip" id="syncChip" onclick="go('settings')" title="Sync status"><span class="sync-ico local">•</span>On this device</button>
       <div class="monthsel">
         <label>Month</label>
@@ -447,12 +457,12 @@
   <nav class="tabs" id="tabs">
     <button data-tab="dashboard" class="active" onclick="go('dashboard')">Dashboard</button>
     <button data-tab="tracker" onclick="go('tracker')">This Month</button>
-    <button data-tab="paychecks" onclick="go('paychecks')">Paychecks</button>
+    <button data-tab="paychecks" onclick="go('paychecks')">Pay period</button>
     <button data-tab="forecast" onclick="go('forecast')">Forecast</button>
     <button data-tab="history" onclick="go('history')">History</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
     <button data-tab="income" onclick="go('income')">Income</button>
-    <button data-tab="sarah" id="navSarah" onclick="go('sarah')">Sarah</button>
+    <button data-tab="sarah" id="navSarah" onclick="go('sarah')">Shared</button>
     <button data-tab="wedding" id="navWedding" onclick="go('wedding')" style="display:none">Wedding</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
   </nav>
@@ -462,7 +472,7 @@
     <button data-tab="dashboard" class="active" onclick="go('dashboard')"><span class="bn-ic">◇</span><span>Home</span></button>
     <button data-tab="tracker" onclick="go('tracker')"><span class="bn-ic">✓</span><span>Month</span></button>
     <button data-tab="paychecks" onclick="go('paychecks')"><span class="bn-ic">❙❙</span><span>Pay</span></button>
-    <button data-tab="sarah" id="bnSarah" onclick="go('sarah')"><span class="bn-ic">♥</span><span>Sarah</span></button>
+    <button data-tab="sarah" id="bnSarah" onclick="go('sarah')"><span class="bn-ic">♥</span><span>Shared</span></button>
     <button data-tab="wedding" id="bnWedding" onclick="go('wedding')" style="display:none"><span class="bn-ic">♥</span><span>Wedding</span></button>
     <button onclick="openMore()"><span class="bn-ic">⋯</span><span>More</span></button>
   </nav>
@@ -477,7 +487,7 @@
         <button onclick="goMore('history')"><span>History</span></button>
         <button onclick="goMore('bills')"><span>Bills</span></button>
         <button onclick="goMore('income')"><span>Income</span></button>
-        <button id="moreSarah" onclick="goMore('sarah')"><span>Sarah</span></button>
+        <button id="moreSarah" onclick="goMore('sarah')"><span>Shared</span></button>
         <button id="moreWedding" onclick="goMore('wedding')" style="display:none"><span>Wedding</span></button>
         <button onclick="goMore('dashboard')"><span>Dashboard</span></button>
         <button onclick="goMore('settings')"><span>Settings</span></button>
@@ -523,16 +533,27 @@
   <!-- PAYCHECKS -->
   <section id="view-paychecks" class="hide">
     <div class="sec-h">
-      <div><h2>Paychecks</h2><div class="desc">Your money split into pay periods — from each payday to the next — so you can see what a single check has to cover and what's left before the next one lands.</div></div>
+      <div><h2>Pay period</h2><div class="desc">One paycheck at a time. Tick bills off as you pay them and watch what's actually left before the next check lands.</div></div>
+      <div class="periodnav">
+        <button class="iconbtn" onclick="payStep(-1)">‹</button>
+        <span id="payLabel" class="periodlbl"></span>
+        <button class="iconbtn" onclick="payStep(1)">›</button>
+        <button class="iconbtn" onclick="payToday()">Today</button>
+      </div>
     </div>
     <div id="payHero"></div>
     <div class="grid kpis" id="payKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
     <div class="panel" style="margin-bottom:16px">
+      <div class="sec-h" style="margin-bottom:10px">
+        <div><div class="chart-h">What this check has to cover</div><div class="chart-s" id="payProgress"></div></div>
+      </div>
+      <div class="scrollx"><table id="payBillsTable"></table></div>
+    </div>
+    <div class="panel">
       <div class="chart-h">Left over each pay period</div>
       <div class="chart-s">Green means the check covered its bills with room to spare</div>
       <div class="chart-box"><canvas id="payChart"></canvas></div>
     </div>
-    <div class="panel scrollx"><table id="payTable"></table></div>
   </section>
 
   <!-- FORECAST -->
@@ -628,10 +649,21 @@
   <!-- SARAH -->
   <section id="view-sarah" class="hide">
     <div class="sec-h">
-      <div><h2>Sarah</h2><div class="desc">Everything you've marked "Given to Sarah," pulled together across every month.</div></div>
+      <div><h2>Shared with Sarah</h2><div class="desc">Bills you've tagged as shared, how the month splits between you, and everything you've handed her.</div></div>
     </div>
     <div id="sarahHero"></div>
-    <div class="panel scrollx"><table id="sarahTable"></table></div>
+    <div class="grid kpis" id="sharedKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
+    <div id="sharedSettle"></div>
+    <div class="panel" style="margin-bottom:16px">
+      <div class="chart-h">Shared bills</div>
+      <div class="chart-s" id="sharedBillsNote">Tagged "Shared with Sarah" — your half is what lands in your budget</div>
+      <div class="scrollx"><table id="sharedBillsTable"></table></div>
+    </div>
+    <div class="panel">
+      <div class="chart-h">Given to Sarah</div>
+      <div class="chart-s">Money you've routed to her, across every month</div>
+      <div class="scrollx"><table id="sarahTable"></table></div>
+    </div>
   </section>
 
   <!-- SETTINGS -->
@@ -678,17 +710,19 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "3.1.0";
+const APP_VERSION = "4.0.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
 /* Build mode is fixed per file: "personal" (your bills) or "shared" (empty, you + Sarah).
    The two builds are completely independent — no data flows between them. */
-const LEDGER_MODE = "shared";
+const LEDGER_MODE = "personal";
 function currentKey(){return LEDGER_MODE==="shared" ? "ledger_state_v2_shared" : "ledger_state_v2";}
 let S=null, charts={}, activeTab="dashboard", selMonth=null;
 let sel=new Set();   // selected bill ids (transient)
 let tsel=new Set(), tselAmt={}, tselable=[];   // tracker multi-select (transient)
+let payIdx=null;        // which pay period is on screen (null = the one we're in)
+let lens="all";         // "all" | "shared" | "mine" — view filter
 
 // cloud runtime
 const CFG_KEY="ledger_cloud_cfg";
@@ -918,10 +952,10 @@ function expandDates(frequency,days,itemStart,itemEnd,fStart,fEndExcl){
 function buildForecast(){
   const st=S.settings;const fStart=parseDate(st.startDate)||new Date();const fEndExcl=addMonths(fStart,Number(st.months)||6);
   let events=[];
-  S.bills.filter(b=>b.active).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
+  S.bills.filter(b=>b.active&&inLens(b)).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
     expandDates(b.frequency,parseDays(b.days),b.startDate||st.startDate,b.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,itemId:b.id}));});
-  S.income.filter(i=>i.active).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
+  S.income.filter(i=>i.active&&inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
     expandDates(i.frequency,parseDays(i.days),i.startDate||st.startDate,i.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Income",name:i.source,group:i.group||"Income",category:"Income",amount:a,itemId:i.id}));});
   events.sort((a,b)=>a.date-b.date||(a.type===b.type?0:a.type==="Income"?-1:1));
@@ -956,8 +990,11 @@ function go(tab){activeTab=tab;
 function openMore(){document.getElementById("moreSheet").classList.add("open");}
 function closeMore(){document.getElementById("moreSheet").classList.remove("open");}
 function goMore(tab){closeMore();go(tab);}
+function setLens(l){lens=l;document.querySelectorAll("#lensTog button").forEach(b=>b.classList.toggle("active",b.dataset.lens===l));renderAll();}
+function inLens(x){return lens==="all"?true:(lens==="shared"?!!x.shared:!x.shared);}
 function applyBuildNav(){
   const shared=(LEDGER_MODE==="shared");
+  const lt=document.getElementById("lensTog");if(lt)lt.style.display=shared?"none":"flex";
   const show=(id,on)=>{const e=document.getElementById(id);if(e)e.style.display=on?"":"none";};
   // Shared build: Wedding tab. Personal build: Sarah tab.
   show("navWedding",shared); show("bnWedding",shared); show("moreWedding",shared);
@@ -1096,6 +1133,10 @@ function exportForecastCsv(){const events=buildForecast();const head=["Date","Ty
 
 /* ============================== TRACKER ============================== */
 function getActual(occId){const m=S.actuals[selMonth]||{};return m[occId]||null;}
+/* month-agnostic (pay periods can span two months) */
+function getActualIn(mk,occId){const m=S.actuals[mk]||{};return m[occId]||null;}
+function setActualIn(mk,occId,patch){if(!S.actuals[mk])S.actuals[mk]={};S.actuals[mk][occId]=Object.assign({paid:false,actual:null},S.actuals[mk][occId],patch);saveState();}
+function effAmount(e){const a=getActualIn(e.monthKey,e.occId);return (a&&a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;}
 function setActual(occId,patch){if(!S.actuals[selMonth])S.actuals[selMonth]={};S.actuals[selMonth][occId]=Object.assign({paid:false,actual:null},S.actuals[selMonth][occId],patch);saveState();}
 function renderTracker(events){
   document.getElementById("trackTitle").textContent=monthLabel(selMonth);
@@ -1152,16 +1193,10 @@ function renderTracker(events){
   document.getElementById("trackKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
   const settle=document.getElementById("settleCard");
   if(settle){
-    const totalPaid=paidByMe+paidBySarah;
-    if(totalPaid>0){
-      const diff=(paidByMe-paidBySarah)/2;   // >0 Sarah owes you; <0 you owe Sarah
-      let line;
-      if(Math.abs(diff)<0.005) line=`<b class="pos">All square</b> — you've each covered ${fmt$0(totalPaid/2)}.`;
-      else if(diff>0) line=`<b class="pos">Sarah owes you ${fmt$0(diff)}</b> to split evenly.`;
-      else line=`<b class="neg">You owe Sarah ${fmt$0(-diff)}</b> to split evenly.`;
-      settle.innerHTML=`<div class="settle"><div class="settle-l"><span class="settle-tag">Split this month</span> ${line}</div>
-        <div class="settle-r"><span>You <b class="num">${fmt$0(paidByMe)}</b></span><span>Sarah <b class="num">${fmt$0(paidBySarah)}</b></span></div></div>`;
-    } else settle.innerHTML="";
+    // split lives on the Shared tab now — just a nudge here when Sarah covered something
+    settle.innerHTML=paidBySarah>0
+      ? `<div class="settle"><div class="settle-l"><span class="settle-tag">Split</span> Sarah covered <b>${fmt$0(paidBySarah)}</b> this month.</div><div class="settle-r"><button class="btn ghost sm" onclick="go('sarah')">Settle up →</button></div></div>`
+      : "";
   }
   const pct=totalCount?Math.round(paidCount/totalCount*100):0;
   document.getElementById("trackCount").innerHTML=`${paidCount} of ${totalCount} paid · ${pct}%<div class="progress" style="width:150px;display:inline-block;vertical-align:middle;margin-left:10px"><div style="width:${pct}%"></div></div>`;
@@ -1324,49 +1359,94 @@ function payPeriods(events){
     const endBal=evs.length?evs[evs.length-1].runningBalance:null;
     const low=evs.reduce((m,e)=>Math.min(m,e.runningBalance),Infinity);
     periods.push({start,end,income,bills,net:income-bills,endBal,low:low===Infinity?endBal:low,
-      billCount:evs.filter(e=>e.type==="Expense").length});
+      billCount:evs.filter(e=>e.type==="Expense").length,
+      expenses:evs.filter(e=>e.type==="Expense"),
+      incomes:evs.filter(e=>e.type==="Income")});
   }
   return periods;
 }
 function periodLabel(p){const endD=p.end?addDays(p.end,-1):null;return endD?`${p.start.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${endD.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`:`${p.start.toLocaleDateString("en-US",{month:"short",day:"numeric"})} →`;}
+function payStep(d){const ps=payPeriods(buildForecast());if(!ps.length)return;const i=payIndex(ps);payIdx=Math.max(0,Math.min(ps.length-1,i+d));renderPaychecks();}
+function payToday(){payIdx=null;renderPaychecks();}
+function payIndex(periods){
+  if(payIdx!=null)return Math.max(0,Math.min(periods.length-1,payIdx));
+  const today=new Date();today.setHours(0,0,0,0);
+  const i=periods.findIndex(p=>today>=p.start && (p.end?today<p.end:true));
+  return i===-1?0:i;
+}
 function renderPaychecks(events){
   events=events||buildForecast();
   const periods=payPeriods(events);
-  if(!periods.length){document.getElementById("payHero").innerHTML="";document.getElementById("payKpis").innerHTML="";document.getElementById("payTable").innerHTML=`<tbody><tr><td class="empty">Add income to see your pay periods.</td></tr></tbody>`;destroy("pay");return;}
+  const hero=document.getElementById("payHero"),kpis=document.getElementById("payKpis"),bt=document.getElementById("payBillsTable");
+  if(!periods.length){hero.innerHTML="";kpis.innerHTML="";document.getElementById("payLabel").textContent="";bt.innerHTML=`<tbody><tr><td class="empty">Add income to see your pay periods.</td></tr></tbody>`;destroy("pay");return;}
+  const idx=payIndex(periods);const cur=periods[idx];
   const today=new Date();today.setHours(0,0,0,0);
-  let cur=periods.find(p=>today>=p.start && (p.end?today<p.end:true))||periods[0];
-  const netCls=cur.net<0?"neg":(cur.net<100?"gold":"pos");
+  const isNow=today>=cur.start&&(cur.end?today<cur.end:true);
+  document.getElementById("payLabel").innerHTML=`${periodLabel(cur)}${isNow?' <span class="pill savings">now</span>':''}`;
 
-  document.getElementById("payHero").innerHTML=`
-    <div class="hero ${cur.net<0?'hero-warn':''}">
+  // what this check must cover, and what's already handled
+  let due=0,paid=0,paidByMe=0,paidBySarah=0;
+  cur.expenses.forEach(e=>{
+    const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);
+    due+=amt;
+    if(a.paid){paid+=amt;if(a.by==="sarah")paidBySarah+=amt;else paidByMe+=amt;}
+  });
+  const remaining=due-paid;              // still to pay out of this check
+  const leftAfterAll=cur.income-due;     // what's left once every bill is covered
+  const availableNow=cur.income-paid;    // cash still in hand this period
+  const cls=leftAfterAll<0?"neg":(leftAfterAll<150?"gold":"pos");
+  const paidPct=cur.income>0?Math.max(0,Math.min(100,Math.round(paid/cur.income*100))):0;
+  const remPct=cur.income>0?Math.max(0,Math.min(100,Math.round(remaining/cur.income*100))):0;
+
+  hero.innerHTML=`
+    <div class="hero ${leftAfterAll<0?'hero-warn':''}">
       <div class="hero-main">
-        <div class="hero-lab">Left this pay period · ${periodLabel(cur)}</div>
-        <div class="hero-val num ${netCls}">${fmt$0(cur.net)}</div>
-        <div class="hero-sub">${fmt$0(cur.income)} paycheck − ${fmt$0(cur.bills)} in bills${cur.endBal!=null?` · ${fmt$0(cur.endBal)} on hand before the next check`:""}</div>
+        <div class="hero-lab">Left after this period's bills</div>
+        <div class="hero-val num ${cls}">${fmt$0(leftAfterAll)}</div>
+        <div class="hero-sub">${fmt$0(cur.income)} paycheck − ${fmt$0(due)} in bills${leftAfterAll<0?` · short by ${fmt$0(-leftAfterAll)}`:""}</div>
+      </div>
+      <div class="hero-bar-wrap">
+        <div class="hero-bar"><span class="seg paid" style="width:${paidPct}%"></span><span class="seg owed" style="width:${remPct}%"></span></div>
+        <div class="hero-legend">
+          <span><i style="background:var(--sage)"></i>Paid ${fmt$0(paid)}</span>
+          <span><i style="background:var(--clay)"></i>Still to pay ${fmt$0(remaining)}</span>
+          <span><i style="background:var(--surface3)"></i>Free ${fmt$0(Math.max(0,leftAfterAll))}</span>
+        </div>
       </div>
     </div>`;
 
   const cards=[
     {lab:"This paycheck",val:fmt$0(cur.income),cls:"pos",dot:cv("--sage")},
-    {lab:"Bills this period",val:fmt$0(cur.bills),cls:"neg",dot:cv("--clay")},
-    {lab:"Left this period",val:fmt$0(cur.net),cls:netCls,dot:cv("--gold")},
-    {lab:"Before next check",val:cur.endBal!=null?fmt$0(cur.endBal):"—",cls:cur.endBal<0?"neg":"info",dot:cv("--blue")},
+    {lab:"Still to pay",val:fmt$0(remaining),cls:remaining>0?"neg":"pos",dot:cv("--clay")},
+    {lab:"In hand right now",val:fmt$0(availableNow),cls:availableNow<0?"neg":"info",dot:cv("--blue")},
+    {lab:"Left after all bills",val:fmt$0(leftAfterAll),cls:cls,dot:cv("--gold")},
   ];
-  document.getElementById("payKpis").innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
+  kpis.innerHTML=cards.map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
 
-  const t=document.getElementById("payTable");
-  const rows=periods.map(p=>{const isCur=p===cur;return `<tr style="${isCur?'background:var(--sage-soft)':''}">
-    <td>${periodLabel(p)}${isCur?' <span class="pill savings" style="margin-left:6px">now</span>':''}</td>
-    <td class="r num pos">${fmt$(p.income)}</td>
-    <td class="r num">${fmt$(p.bills)}</td>
-    <td class="r num ${p.net<0?'neg':'pos'}">${p.net<0?'−':''}${fmt$(Math.abs(p.net))}</td>
-    <td class="r num ${p.low<0?'neg':''}">${p.low!=null?fmt$(p.low):'—'}</td>
-    <td class="r num ${p.endBal<0?'neg':''}">${p.endBal!=null?fmt$(p.endBal):'—'}</td>
-  </tr>`;}).join("");
-  t.innerHTML=`<thead><tr><th>Pay period</th><th class="r">Paycheck</th><th class="r">Bills</th><th class="r">Left over</th><th class="r">Low point</th><th class="r">Before next</th></tr></thead><tbody>${rows}</tbody>`;
+  const n=cur.expenses.length,np=cur.expenses.filter(e=>{const a=getActualIn(e.monthKey,e.occId);return a&&a.paid;}).length;
+  document.getElementById("payProgress").innerHTML=`${np} of ${n} paid · running balance shows what's left after each one`;
 
+  // bills in this period, with a running balance so you can sequence payments
+  if(!n){bt.innerHTML=`<tbody><tr><td class="empty">No bills land in this pay period.</td></tr></tbody>`;}
+  else{
+    const sorted=cur.expenses.slice().sort((a,b)=>a.date-b.date);
+    let run=cur.income;
+    const rows=sorted.map(e=>{
+      const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);run-=amt;
+      const shared=(S.bills.find(b=>b.id===e.itemId)||{}).shared;
+      return `<tr class="${a.paid?'paidrow':''}">
+        <td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="payTogglePaid('${e.monthKey}','${e.occId}',this.checked)"></td>
+        <td>${e.date.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</td>
+        <td><b>${esc(e.name)}</b>${shared?' <span class="pill sarah">Shared</span>':''}${a.by==="sarah"?' <span class="pill wed">→ Sarah</span>':''}</td>
+        <td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td>
+        <td class="r num">${fmt$(amt)}</td>
+        <td class="r num ${run<0?'neg':'muted'}">${fmt$(run)}</td>
+      </tr>`;}).join("");
+    bt.innerHTML=`<thead><tr><th style="width:30px" class="r">Paid</th><th>Date</th><th>Bill</th><th>Category</th><th class="r">Amount</th><th class="r">Left after</th></tr></thead><tbody>${rows}</tbody>`;
+  }
   drawPay(periods,cur);
 }
+function payTogglePaid(mk,occId,c){setActualIn(mk,occId,c?{paid:true}:{paid:false,by:null});renderPaychecks();}
 function drawPay(periods,cur){
   destroy("pay");
   charts.pay=new Chart(document.getElementById("payChart"),{type:"bar",
@@ -1378,13 +1458,13 @@ function drawPay(periods,cur){
 
 /* ============================== BILLS + BULK ============================== */
 function grpClass(g){g=String(g||"").toLowerCase();return g==="debt"?"debt":g==="savings"?"savings":g==="income"?"income":g==="subscriptions"?"subs":g==="other"?"other":"bills";}
-function weddingChip(b){return b.wedding?' <span class="pill wed">Wedding</span>':'';}
+function weddingChip(b){return (b.shared?' <span class="pill sarah">Shared</span>':'')+(b.wedding?' <span class="pill wed">Wedding</span>':'');}
 function renderBills(){
   const t=document.getElementById("billsTable");
   // prune selections that no longer exist
   sel.forEach(id=>{if(!S.bills.some(b=>b.id===id))sel.delete(id);});
   renderBulkBar();
-  const bills=S.bills;
+  const bills=S.bills.filter(inLens);
   if(!bills.length){t.innerHTML=`<tbody><tr><td class="empty">No bills yet.</td></tr></tbody>`;return;}
   const allSel=bills.every(b=>sel.has(b.id));
   const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
@@ -1414,15 +1494,18 @@ function renderBulkBar(){
     <span class="sep"></span>
     <button class="iconbtn" onclick="bulkActive(true)">Activate</button>
     <button class="iconbtn" onclick="bulkActive(false)">Pause</button>
+    <button class="iconbtn" onclick="bulkShared(true)">Mark shared</button>
+    <button class="iconbtn" onclick="bulkShared(false)">Not shared</button>
     <button class="iconbtn del" onclick="bulkDelete()">Delete</button>
     <button class="iconbtn" onclick="sel.clear();renderBills()" style="margin-left:auto">Clear selection</button>
   </div>`;
 }
 function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 function bulkSet(field,val){if(!val)return;const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b[field]=val;});saveState();renderBills();toast(`Updated ${n} bills`);}
+function bulkShared(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b.shared=v;});saveState();renderAll();toast(`${v?"Marked shared":"Unmarked"}: ${n} bills`);}
 function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
 
-function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income;if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">No income yet.</td></tr></tbody>`;return;}
+function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(inLens);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">No income yet.</td></tr></tbody>`;return;}
   const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
   t.innerHTML=`<thead><tr><th style="width:30px">On</th><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
 function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
@@ -1446,15 +1529,16 @@ function openItem(kind,id){
       <div class="field"><label>End date <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="f_end" class="inp" type="date" value="${it.endDate||''}"></div>
       <div class="field" style="grid-column:span 2"><label>Notes</label><input id="f_notes" class="inp" value="${esc(it.notes||'')}"></div>
     </div>
-    ${(kind==="bill"&&LEDGER_MODE==="personal")?`<label class="sharedtoggle"><input id="f_wedding" type="checkbox" class="chk" ${it.wedding?'checked':''}><span>Wedding-related <span class="muted" style="font-weight:400">— tags this as a wedding expense you can filter on</span></span></label>`:''}
+    ${LEDGER_MODE==="personal"?`<label class="sharedtoggle"><input id="f_shared" type="checkbox" class="chk" ${it.shared?'checked':''}><span>Shared with Sarah <span class="muted" style="font-weight:400">— counts toward the split on the Shared tab</span></span></label>`:''}
+    ${(kind==="bill"&&LEDGER_MODE==="personal")?`<label class="sharedtoggle" style="background:var(--gold-soft)"><input id="f_wedding" type="checkbox" class="chk" ${it.wedding?'checked':''}><span>Wedding-related <span class="muted" style="font-weight:400">— tags this as a wedding expense you can filter on</span></span></label>`:''}
     <div class="muted" style="font-size:11.5px;margin-top:12px">Weekly/biweekly repeat from the anchor date. Monthly-type frequencies use the due day(s); semimonthly defaults to the 1st &amp; 15th; bimonthly = every other month.</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveItem('${kind}','${id||''}')">Save</button></div>
   </div></div>`;
 }
 function closeModal(){document.getElementById("modalRoot").innerHTML="";}
 function saveItem(kind,id){const isBill=kind==="bill";const v=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};const name=v("f_name");if(!name){toast("Give it a name");return;}
-  const wedEl=document.getElementById("f_wedding");
-  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),wedding:!!(wedEl&&wedEl.checked)};
+  const wedEl=document.getElementById("f_wedding"),shEl=document.getElementById("f_shared");
+  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),wedding:!!(wedEl&&wedEl.checked),shared:!!(shEl&&shEl.checked)};
   if(isBill){obj.name=name;obj.category=v("f_category")||obj.group;}else obj.source=name;
   const arr=isBill?S.bills:S.income;if(id){const it=arr.find(x=>x.id===id);Object.assign(it,obj);}else{obj.id=uid();arr.push(obj);}
   saveState();closeModal();renderAll();toast("Saved");}
@@ -1720,6 +1804,8 @@ function removeProposal(id){const it=S.wedding.items.find(x=>x.id===id);if(!it)r
 /* ============================== SARAH ============================== */
 function renderSarah(events){
   events=events||buildForecast();
+  if(!selMonth){const ks=monthKeys(events);selMonth=ks[0]||null;}
+  if(!selMonth)return;
   const byId={};events.forEach(e=>{byId[e.occId]=e;});
   const rows=[];
   Object.keys(S.actuals||{}).forEach(mk=>{const m=S.actuals[mk]||{};Object.keys(m).forEach(occId=>{const a=m[occId];if(a&&a.by==="sarah"){const e=byId[occId];if(e)rows.push({date:e.date,name:e.name,category:e.category,amount:(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount,month:mk,paid:!!a.paid,wedding:!!a.wedding});}});});
@@ -1728,14 +1814,66 @@ function renderSarah(events){
   const total=rows.reduce((s,r)=>s+r.amount,0);
   const wedTotal=rows.filter(r=>r.wedding).reduce((s,r)=>s+r.amount,0);
 
+  // shared bills + this month's split
+  const sharedBills=(S.bills||[]).filter(b=>b.shared);
+  const monthEvents=events.filter(e=>e.monthKey===selMonth&&e.type==="Expense");
+  let sharedDue=0,sharedPaidMe=0,sharedPaidSarah=0;
+  monthEvents.forEach(e=>{
+    if(!sharedBills.some(b=>b.id===e.itemId))return;
+    const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);
+    sharedDue+=amt;
+    if(a.paid){if(a.by==="sarah")sharedPaidSarah+=amt;else sharedPaidMe+=amt;}
+  });
+  const sharedPaid=sharedPaidMe+sharedPaidSarah;
+
   document.getElementById("sarahHero").innerHTML=`
     <div class="hero">
       <div class="hero-main">
-        <div class="hero-lab">Total given to Sarah</div>
-        <div class="hero-val num gold">${fmt$0(total)}</div>
-        <div class="hero-sub">${rows.length} item${rows.length===1?"":"s"} across ${new Set(rows.map(r=>r.month)).size} month${new Set(rows.map(r=>r.month)).size===1?"":"s"}${wedTotal>0?` · ${fmt$0(wedTotal)} for the wedding`:""}</div>
+        <div class="hero-lab">Shared bills · ${monthLabel(selMonth)}</div>
+        <div class="hero-val num gold">${fmt$0(sharedDue)}</div>
+        <div class="hero-sub">${sharedBills.length} shared bill${sharedBills.length===1?"":"s"} · ${fmt$0(sharedPaid)} covered so far${total>0?` · ${fmt$0(total)} given to Sarah all-time`:""}</div>
+      </div>
+      <div class="hero-bar-wrap">
+        <div class="hero-bar"><span class="seg paid" style="width:${sharedDue>0?Math.min(100,Math.round(sharedPaid/sharedDue*100)):0}%"></span></div>
+        <div class="hero-legend">
+          <span><i style="background:var(--sage)"></i>You ${fmt$0(sharedPaidMe)}</span>
+          <span><i style="background:var(--lav)"></i>Sarah ${fmt$0(sharedPaidSarah)}</span>
+          <span><i style="background:var(--clay)"></i>Unpaid ${fmt$0(Math.max(0,sharedDue-sharedPaid))}</span>
+        </div>
       </div>
     </div>`;
+
+  document.getElementById("sharedKpis").innerHTML=[
+    {lab:"Shared this month",val:fmt$0(sharedDue),cls:"gold",dot:cv("--gold")},
+    {lab:"Your half",val:fmt$0(sharedDue/2),cls:"info",dot:cv("--blue")},
+    {lab:"You've paid",val:fmt$0(sharedPaidMe),cls:"pos",dot:cv("--sage")},
+    {lab:"Given to Sarah",val:fmt$0(total),cls:"neg",dot:cv("--lav")},
+  ].map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
+
+  // settle-up on the shared slice
+  const settle=document.getElementById("sharedSettle");
+  if(sharedPaid>0){
+    const diff=(sharedPaidMe-sharedPaidSarah)/2;
+    let line;
+    if(Math.abs(diff)<0.005)line=`<b class="pos">All square</b> — you've each covered ${fmt$0(sharedPaid/2)}.`;
+    else if(diff>0)line=`<b class="pos">Sarah owes you ${fmt$0(diff)}</b> to split ${monthLabel(selMonth)} evenly.`;
+    else line=`<b class="neg">You owe Sarah ${fmt$0(-diff)}</b> to split ${monthLabel(selMonth)} evenly.`;
+    settle.innerHTML=`<div class="settle"><div class="settle-l"><span class="settle-tag">Settle up</span> ${line}</div>
+      <div class="settle-r"><span>You <b class="num">${fmt$0(sharedPaidMe)}</b></span><span>Sarah <b class="num">${fmt$0(sharedPaidSarah)}</b></span></div></div>`;
+  } else settle.innerHTML="";
+
+  const sbt=document.getElementById("sharedBillsTable");
+  if(!sharedBills.length){sbt.innerHTML=`<tbody><tr><td class="empty">No shared bills yet. Open any bill and tick "Shared with Sarah."</td></tr></tbody>`;}
+  else{
+    const sbRows=sharedBills.map(b=>{const amt=toNum(b.amount);return `<tr style="${b.active?'':'opacity:.5'}">
+      <td><b>${esc(b.name)}</b>${b.wedding?' <span class="pill wed">Wedding</span>':''}</td>
+      <td><span class="pill ${grpClass(b.group)}">${esc(b.category)}</span></td>
+      <td>${esc(b.frequency)}</td>
+      <td class="r num">${fmt$(amt)}</td>
+      <td class="r num">${fmt$(amt/2)}</td>
+      <td class="r"><button class="iconbtn" onclick="openItem('bill','${b.id}')">Edit</button></td></tr>`;}).join("");
+    sbt.innerHTML=`<thead><tr><th>Bill</th><th>Category</th><th>Frequency</th><th class="r">Full</th><th class="r">Half</th><th class="r"></th></tr></thead><tbody>${sbRows}</tbody>`;
+  }
 
   const t=document.getElementById("sarahTable");
   if(!rows.length){t.innerHTML=`<tbody><tr><td class="empty">Nothing marked "Given to Sarah" yet. In This Month, select items and tap "Given to Sarah," or open a record and set Paid by → Sarah.</td></tr></tbody>`;return;}
