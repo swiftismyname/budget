@@ -97,9 +97,6 @@
   .lenstog{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;box-shadow:var(--shadow-sm)}
   .lenstog button{background:none;border:0;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;color:var(--text-dim);cursor:pointer;font-family:'Plus Jakarta Sans';white-space:nowrap}
   .lenstog button.active{background:var(--accent-lav);color:#fff}
-  .michaelbtn{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text-dim);cursor:pointer;box-shadow:var(--shadow-sm);font-family:'Plus Jakarta Sans'}
-  .michaelbtn:hover{border-color:var(--accent-lav);color:var(--text)}
-  .michaelbtn.on{background:var(--accent-lav);color:#fff;border-color:var(--accent-lav)}
   .mast-right{display:flex;align-items:center;gap:10px}
   .monthsel{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 16px;box-shadow:var(--shadow-sm)}
   .monthsel label{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);font-weight:600}
@@ -337,7 +334,7 @@
     /* This Month: drop the least-critical columns so it fits the screen
        (keep Date, Item, Budget/amount, Actual, Paid; hide Category & +/−) */
     #trackTable th:nth-child(5),#trackTable td:nth-child(5),   /* Category */
-    #trackTable th:nth-child(8),#trackTable td:nth-child(8){display:none} /* +/- */
+    #trackTable th:nth-child(7),#trackTable td:nth-child(7){display:none} /* Actual — keep Paid + Balance */
     #trackTable td:nth-child(4){font-size:12.5px}
 
     /* Forecast/History wide tables keep horizontal scroll (fine) */
@@ -699,7 +696,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.7.0";
+const APP_VERSION = "4.8.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -966,7 +963,7 @@ function buildForecast(){
     const a=(LEDGER_MODE==="personal"&&b.shared)?full/2:full;   // shared bills: only your half hits your budget
     expandDates(b.frequency,parseDays(b.days),b.startDate||st.startDate,b.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,fullAmount:full,shared:!!b.shared,itemId:b.id}));});
-  S.income.filter(i=>inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
+  if(LEDGER_MODE!=="shared")S.income.filter(i=>inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
     expandDates(i.frequency,parseDays(i.days),i.startDate||st.startDate,i.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Income",name:i.source,group:i.group||"Income",category:"Income",amount:a,itemId:i.id}));});
   events.sort((a,b)=>a.date-b.date||(a.type===b.type?0:a.type==="Income"?-1:1));
@@ -1026,7 +1023,6 @@ function renderAll(){const events=buildForecast();const keys=monthKeys(events);p
   if(activeTab==="settings")fillSettings();}
 
 function baseChartOpts(){Chart.defaults.font.family="'Plus Jakarta Sans',sans-serif";}
-function styleAxes(){return {color:cv("--text-dim"),grid:{color:cv("--line")}};}
 function destroy(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 function palette(){return [cv("--sage"),cv("--clay"),cv("--blue"),cv("--lav"),cv("--gold"),cv("--rose"),"#7fc0bf","#edc08a","#9cbf85","#c79ac0"];}
 
@@ -1167,12 +1163,10 @@ function renderForecast(events){events=events||buildForecast();const f=document.
 function exportForecastCsv(){const events=buildForecast();const head=["Date","Type","Name","Group","Category","Amount","MonthKey","Running Balance"];const lines=[head.join(",")].concat(events.map(e=>[ymd(e.date),e.type,csv(e.name),csv(e.group),csv(e.category),e.amount,e.monthKey,e.runningBalance.toFixed(2)].join(",")));download("forecast.csv",lines.join("\n"),"text/csv");}
 
 /* ============================== TRACKER ============================== */
-function getActual(occId){const m=S.actuals[selMonth]||{};return m[occId]||null;}
 /* month-agnostic (pay periods can span two months) */
 function getActualIn(mk,occId){const m=S.actuals[mk]||{};return m[occId]||null;}
 function setActualIn(mk,occId,patch){if(!S.actuals[mk])S.actuals[mk]={};S.actuals[mk][occId]=Object.assign({paid:false,actual:null},S.actuals[mk][occId],patch);saveState();}
 function effAmount(e){const a=getActualIn(e.monthKey,e.occId);return (a&&a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;}
-function setActual(occId,patch){if(!S.actuals[selMonth])S.actuals[selMonth]={};S.actuals[selMonth][occId]=Object.assign({paid:false,actual:null},S.actuals[selMonth][occId],patch);saveState();}
 function renderTracker(events){
   const keys=monthKeys(events);
   const mEvents=events.filter(e=>e.monthKey===selMonth);
@@ -1180,7 +1174,7 @@ function renderTracker(events){
   document.getElementById("trackTitle").textContent=monthLabel(selMonth);
   if(LEDGER_MODE==="shared"){const td=document.getElementById("trackDesc");if(td)td.textContent="Shared bills for the month — tick them off as they get paid.";const tn=document.getElementById("trackNav");if(tn)tn.parentElement.style.display="none";const pc=document.getElementById("payChartPanel");if(pc)pc.style.display="none";}
   document.getElementById("trackListTitle").textContent=monthLabel(selMonth);
-  const pp=document.getElementById("payChartPanel");if(pp)pp.style.display="";
+  const pp=document.getElementById("payChartPanel");if(pp)pp.style.display=(LEDGER_MODE==="shared")?"none":"";
   // current (or navigated) pay period, for the highlight + hero
   const ps=payPeriods(events);
   const periodCur=ps.length?ps[payIndex(ps)]:null;
@@ -1276,13 +1270,13 @@ function renderTracker(events){
   const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
-  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,amt:e.amount,make:bal=>`<tr data-rowid="${e.occId}" class="${inPeriod(e.date)?'inperiod':''} payrow"><td></td>${H}<td>${shortD(e.date)}</td><td>💰 ${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td></td><td class="r num">${fmt$(bal)}</td></tr>`}));
+  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,amt:e.amount,make:bal=>`<tr data-rowid="${e.occId}" class="${inPeriod(e.date)?'inperiod':''} payrow"><td></td>${H}<td>${shortD(e.date)}</td><td>💰 ${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td></td><td class="r num">${fmt$(bal)}</td><td></td></tr>`}));
   expenses.forEach(e=>{
     const a=getActualIn(e.monthKey,e.occId)||{paid:false,actual:null,by:null};
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,amt:-eff,make:bal=>`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}${e.shared?` · your half of ${fmt$(e.fullAmount)}`:``}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num neg">−${fmt$(eff)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,amt:-eff,make:bal=>`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}${(e.shared&&e.amount!==e.fullAmount)?` · your half of ${fmt$(e.fullAmount)}`:``}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num neg">−${fmt$(eff)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
@@ -1415,7 +1409,6 @@ function saveAdhocRecord(id){
   const by=document.getElementById("ar_by").value;it.paid=!!by;it.by=by==="sarah"?"sarah":(by?"me":null);
   saveState();closeModal();renderTracker(buildForecast());toast("Saved");
 }
-function addAdhoc(){if(!S.adhoc[selMonth])S.adhoc[selMonth]=[];const [y,m]=selMonth.split("-");S.adhoc[selMonth].push({id:uid(),date:`${y}-${m}-15`,name:"",category:"",amount:"",paid:false});saveState();renderTracker(buildForecast());}
 function editAdhoc(id,field,val){const arr=S.adhoc[selMonth]||[];const it=arr.find(x=>x.id===id);if(!it)return;it[field]=val;saveState();if(field==="amount"||field==="date"||field==="paid")renderTracker(buildForecast());}
 function delAdhoc(id){S.adhoc[selMonth]=(S.adhoc[selMonth]||[]).filter(x=>x.id!==id);saveState();renderTracker(buildForecast());}
 
@@ -1700,7 +1693,6 @@ function drawWeddingPaid(items){
       plugins:{legend:{labels:{color:cv("--text-dim"),boxWidth:12,padding:12,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt$(c.parsed.x)}`}}},
       scales:{x:{stacked:true,ticks:{color:cv("--text-dim"),callback:v=>"$"+(v/1000).toFixed(1)+"k"},grid:{color:cv("--line")}},y:{stacked:true,ticks:{color:cv("--text-dim")},grid:{display:false}}}}});
 }
-function editWedding(id,field,val){const it=S.wedding.items.find(x=>x.id===id);if(!it)return;it[field]=(field==="estimated"||field==="paid")?toNum(val):val;saveState();if(field==="estimated"||field==="paid")renderWedding();}
 function addWeddingItem(){const it={id:uid(),item:"",vendor:"",dueDate:"",estimated:0,paid:0,notes:""};S.wedding.items.push(it);saveState();renderWedding();openWeddingRecord(it.id);}
 function delWeddingItem(id){if(!confirm("Remove this wedding item?"))return;S.wedding.items=S.wedding.items.filter(x=>x.id!==id);saveState();renderWedding();}
 function setWeddingBudget(v){S.wedding.budget=toNum(v);saveState();renderWedding();}
@@ -2043,6 +2035,7 @@ function runMigrations(){
   S.wedding=S.wedding||{budget:0,items:[]};
   if(!Array.isArray(S.wedding.items))S.wedding.items=[];
   S.order=S.order||{};
+  if(LEDGER_MODE==="shared")S.income=[];   // shared ledger tracks expenses only
   (S.bills||[]).forEach(b=>{b.active=true;
     const f=String(b.frequency||"").toLowerCase();
     if(["monthly","bimonthly","quarterly","annually","yearly"].includes(f)){const d=parseDate(b.startDate);if(d)b.days=String(d.getDate());}
