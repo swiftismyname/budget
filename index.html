@@ -466,7 +466,7 @@
     <button data-tab="tracker" onclick="go('tracker')">This Month</button>
     <button data-tab="forecast" onclick="go('forecast')">Forecast</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
-    <button data-tab="income" onclick="go('income')">Income</button>
+    <button data-tab="income" id="navIncome" onclick="go('income')">Income</button>
     <button data-tab="sarah" id="navSarah" onclick="go('sarah')">Shared</button>
     <button data-tab="wedding" id="navWedding" onclick="go('wedding')" style="display:none">Wedding</button>
     <button data-tab="settings" onclick="go('settings')">Settings</button>
@@ -489,7 +489,7 @@
       <div class="sheet-grid">
         <button onclick="goMore('forecast')"><span>Forecast</span></button>
         <button onclick="goMore('bills')"><span>Bills</span></button>
-        <button onclick="goMore('income')"><span>Income</span></button>
+        <button id="moreIncome" onclick="goMore('income')"><span>Income</span></button>
         <button id="moreSarah" onclick="goMore('sarah')"><span>Shared</span></button>
         <button id="moreWedding" onclick="goMore('wedding')" style="display:none"><span>Wedding</span></button>
         <button onclick="goMore('dashboard')"><span>Dashboard</span></button>
@@ -699,7 +699,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.5.0";
+const APP_VERSION = "4.6.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -774,6 +774,7 @@ async function saveState(){
     toast("This browser isn't saving locally — host the file or sign in to sync to keep changes.");
   }
   if(cloudEnabled && sbUser) cloudSaveDebounced();
+  if(cloudEnabled && sbUser && LEDGER_MODE==="personal") publishSharedBillsDebounced();
 
   return ok;
 }
@@ -834,6 +835,26 @@ async function cloudSignIn(email,password,mode){
   }
 }
 async function cloudSignOut(){try{await sb.auth.signOut();}catch(e){}sbUser=null;setSync(cloudEnabled?"signin":"local");}
+let pubTimer=null;
+function publishSharedBillsDebounced(){clearTimeout(pubTimer);pubTimer=setTimeout(publishSharedBills,1500);}
+async function publishSharedBills(){
+  if(LEDGER_MODE!=="personal"||!(cloudEnabled&&sbUser))return;
+  const mine=(S.bills||[]).filter(b=>b.shared);
+  if(!mine.length)return;
+  try{
+    const {data}=await sb.from("household_ledger").select("data").eq("id","shared").maybeSingle();
+    const Sh=(data&&data.data)?data.data:seedEmpty();
+    Sh.bills=Sh.bills||[];
+    let changed=false;
+    mine.forEach(b=>{
+      const copy={id:b.id,active:true,shared:true,name:b.name,group:b.group,category:b.category,amount:toNum(b.amount),frequency:b.frequency,days:b.days,startDate:b.startDate,endDate:b.endDate||"",notes:b.notes||"",wedding:!!b.wedding};
+      const i=Sh.bills.findIndex(x=>x.id===b.id);
+      if(i===-1){Sh.bills.push(copy);changed=true;}
+      else{const before=JSON.stringify(Sh.bills[i]);Sh.bills[i]=Object.assign({},Sh.bills[i],copy);if(JSON.stringify(Sh.bills[i])!==before)changed=true;}
+    });
+    if(changed){Sh.updatedAt=Date.now();const {error}=await sb.from("household_ledger").upsert({id:"shared",data:Sh,updated_at:new Date().toISOString()});if(error)throw error;}
+  }catch(e){console.error("publishSharedBills failed",e);}
+}
 async function refreshFromCloud(silent){
   if(!(cloudEnabled&&sbUser)) return;
   const cloud=await cloudPull();
@@ -989,6 +1010,7 @@ function applyBuildNav(){
   // Shared build: Wedding tab. Personal build: Sarah tab.
   show("navWedding",shared); show("bnWedding",shared); show("moreWedding",shared);
   show("navSarah",!shared); show("bnSarah",!shared); show("moreSarah",!shared);
+  show("navIncome",!shared); show("moreIncome",!shared);   // shared build: bills only, no income
 }
 function populateMonthSelect(keys){const sel=document.getElementById("monthSelect");sel.innerHTML=keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join("");if(!selMonth||!keys.includes(selMonth))selMonth=keys[0];sel.value=selMonth;}
 function onMonthChange(){selMonth=document.getElementById("monthSelect").value;renderAll();}
