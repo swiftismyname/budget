@@ -518,7 +518,7 @@
   <!-- TRACKER -->
   <section id="view-tracker" class="hide">
     <div class="sec-h">
-      <div><h2 id="trackTitle">This Month</h2><div class="desc">The whole month, with your current pay period highlighted. Bills come from the Bills tab and land on their due date.</div></div>
+      <div><h2 id="trackTitle">This Month</h2><div class="desc" id="trackDesc">The whole month, with your current pay period highlighted. Bills come from the Bills tab and land on their due date.</div></div>
       <div class="periodnav">
         <span class="muted" style="font-size:11px">Pay period</span>
         <span id="trackNav">
@@ -549,7 +549,7 @@
   <!-- FORECAST -->
   <section id="view-forecast" class="hide">
     <div class="sec-h">
-      <div><h2>Forecast</h2><div class="desc">Where your balance is heading, built from your bills, income and settings. The charts below help you spot tight spots before they arrive.</div></div>
+      <div><h2>Forecast</h2><div class="desc" id="fcDesc">Where your balance is heading, built from your bills, income and settings. The charts below help you spot tight spots before they arrive.</div></div>
       <div class="toolbar">
         <select id="fcFilter" class="inp" style="width:auto" onchange="refreshForecast()"></select>
         <button class="btn ghost sm" onclick="exportForecastCsv()">Export CSV</button>
@@ -558,7 +558,7 @@
 
     <div class="grid kpis" id="fcKpis" style="margin-bottom:16px"></div>
 
-    <div class="grid charts" style="grid-template-columns:1.35fr 1fr;margin-bottom:16px">
+    <div class="grid charts" id="fcBalanceCharts" style="grid-template-columns:1.35fr 1fr;margin-bottom:16px">
       <div class="panel">
         <div class="chart-h" id="fcBalH">Projected balance over time</div>
         <div class="chart-s" id="fcBalS">Every dated event — the dot marks your lowest projected point</div>
@@ -699,7 +699,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.6.0";
+const APP_VERSION = "4.7.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -1031,7 +1031,24 @@ function destroy(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 function palette(){return [cv("--sage"),cv("--clay"),cv("--blue"),cv("--lav"),cv("--gold"),cv("--rose"),"#7fc0bf","#edc08a","#9cbf85","#c79ac0"];}
 
 /* ============================== DASHBOARD ============================== */
+function renderDashboardShared(events,keys){
+  const mEvents=events.filter(e=>e.monthKey===selMonth&&e.type==="Expense");
+  let due=0,paid=0,paidCount=0;
+  mEvents.forEach(e=>{const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);due+=amt;if(a.paid){paid+=amt;paidCount++;}});
+  const owed=due-paid;
+  const k=[
+    {lab:"Bills this month",val:fmt$0(due),cls:"gold",dot:cv("--gold"),foot:monthLabel(selMonth)},
+    {lab:"Paid so far",val:fmt$0(paid),cls:"pos",dot:cv("--sage"),foot:`${paidCount} of ${mEvents.length} bills`},
+    {lab:"Still owed",val:fmt$0(owed),cls:owed>0?"neg":"pos",dot:cv("--clay"),foot:"to be paid"},
+    {lab:"Wedding total due",val:fmt$0((S.wedding&&S.wedding.items||[]).reduce((x,i)=>x+toNum(i.estimated),0)),cls:"info",dot:cv("--lav"),foot:"see Wedding tab"},
+  ];
+  document.getElementById("kpis").innerHTML=k.map(x=>`<div class="kpi"><span class="dot" style="background:${x.dot}"></span><div class="lab">${x.lab}</div><div class="val num ${x.cls}">${x.val}</div><div class="foot">${x.foot}</div></div>`).join("");
+  document.getElementById("catTitle").textContent="Where it goes — "+monthLabel(selMonth);
+  drawCat(categorySpend(events,selMonth));
+  drawMonth(monthlyByGroup(events,keys));
+}
 function renderDashboard(events,keys){
+  if(LEDGER_MODE==="shared"){renderDashboardShared(events,keys);return;}
   const rows=monthlyByGroup(events,keys);const m=rows.find(r=>r.key===selMonth)||rows[0];
   const opening=monthOpening(events,selMonth,keys);const out=m.bills+m.debt+m.savings;
   const k=[
@@ -1050,11 +1067,14 @@ function drawCat(cats){destroy("cat");const ctx=document.getElementById("catChar
   const pal=palette();
   charts.cat=new Chart(ctx,{type:"doughnut",data:{labels:cats.map(c=>c.category),datasets:[{data:cats.map(c=>c.amount),backgroundColor:cats.map((_,i)=>pal[i%pal.length]),borderColor:cv("--surface"),borderWidth:3}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"right",labels:{color:cv("--text-dim"),boxWidth:10,boxHeight:10,padding:9,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt$(c.parsed)}`}}}}});}
-function drawMonth(rows){destroy("month");
-  charts.month=new Chart(document.getElementById("monthChart"),{type:"bar",data:{labels:rows.map(r=>r.label),datasets:[
+function drawMonth(rows){destroy("month");const sharedMode=(LEDGER_MODE==="shared");
+  const dsets=sharedMode
+    ? [{label:"Bills",data:rows.map(r=>r.bills+r.debt+r.savings),backgroundColor:cv("--clay"),borderRadius:6}]
+    : [
     {label:"In",data:rows.map(r=>r.income),backgroundColor:cv("--sage"),borderRadius:6,stack:"a"},
     {label:"Out",data:rows.map(r=>r.bills+r.debt+r.savings),backgroundColor:cv("--clay"),borderRadius:6,stack:"b"},
-    {type:"line",label:"Left over",data:rows.map(r=>r.net),borderColor:cv("--gold"),backgroundColor:cv("--gold"),tension:.35,borderWidth:2.5,pointRadius:3,pointBackgroundColor:cv("--gold")}]},
+    {type:"line",label:"Left over",data:rows.map(r=>r.net),borderColor:cv("--gold"),backgroundColor:cv("--gold"),tension:.35,borderWidth:2.5,pointRadius:3,pointBackgroundColor:cv("--gold")}];
+  charts.month=new Chart(document.getElementById("monthChart"),{type:"bar",data:{labels:rows.map(r=>r.label),datasets:dsets},
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{if(els.length){drillToMonth(rows[els[0].index].key);}},
       onHover:(e,els)=>{e.native.target.style.cursor=els.length?"pointer":"default";},
@@ -1065,6 +1085,11 @@ function drawMonth(rows){destroy("month");
 function refreshForecast(){const e=buildForecast();renderForecastView(e,monthKeys(e));}
 function setText(id,t){const el=document.getElementById(id);if(el)el.textContent=t;}
 function renderForecastView(events,keys){
+  if(LEDGER_MODE==="shared"){
+    const bc=document.getElementById("fcBalanceCharts");if(bc)bc.style.display="none";
+    const kp=document.getElementById("fcKpis");if(kp)kp.style.display="none";
+    const de=document.getElementById("fcDesc");if(de)de.textContent="Upcoming shared bills, month by month.";
+  }
   keys=keys||monthKeys(events);
   const f=document.getElementById("fcFilter").value;
   const single=f!=="all";
@@ -1153,6 +1178,7 @@ function renderTracker(events){
   const mEvents=events.filter(e=>e.monthKey===selMonth);
   const opening=monthOpening(events,selMonth,keys);
   document.getElementById("trackTitle").textContent=monthLabel(selMonth);
+  if(LEDGER_MODE==="shared"){const td=document.getElementById("trackDesc");if(td)td.textContent="Shared bills for the month — tick them off as they get paid.";const tn=document.getElementById("trackNav");if(tn)tn.parentElement.style.display="none";const pc=document.getElementById("payChartPanel");if(pc)pc.style.display="none";}
   document.getElementById("trackListTitle").textContent=monthLabel(selMonth);
   const pp=document.getElementById("payChartPanel");if(pp)pp.style.display="";
   // current (or navigated) pay period, for the highlight + hero
@@ -1185,6 +1211,7 @@ function renderTracker(events){
   tsel.forEach(id=>{if(!tselable.includes(id))tsel.delete(id);});
 
   const available=opening+incomeTotal;
+  const sharedMode=(LEDGER_MODE==="shared");
   const leftToSpend=available-obligations;
   const cushionCls=leftToSpend<0?"neg":(leftToSpend<200?"gold":"pos");
   const spentPctOfAvail=available>0?Math.max(0,Math.min(100,Math.round(spent/available*100))):0;
@@ -1197,7 +1224,18 @@ function renderTracker(events){
       <b class="num ${pClsHero}">${fmt$0(pLeft)}</b> left after its bills</div>
       <div class="pstrip-sub">${fmt$0(periodCur.income)} paycheck − ${fmt$0(pDue)} due · ${fmt$0(pPaid)} already paid</div>
     </div>`:"";
-  document.getElementById("spendHero").innerHTML=`${periodStrip}
+  document.getElementById("spendHero").innerHTML=sharedMode?`
+    <div class="hero">
+      <div class="hero-main">
+        <div class="hero-lab">Still owed this month</div>
+        <div class="hero-val num ${stillToPay>0?'neg':'pos'}">${fmt$0(stillToPay)}</div>
+        <div class="hero-sub">${fmt$0(obligations)} in shared bills · ${fmt$0(spent)} paid so far</div>
+      </div>
+      <div class="hero-bar-wrap">
+        <div class="hero-bar"><span class="seg paid" style="width:${obligations>0?Math.min(100,Math.round(spent/obligations*100)):0}%"></span></div>
+        <div class="hero-legend"><span><i style="background:var(--sage)"></i>Paid ${fmt$0(spent)}</span><span><i style="background:var(--clay)"></i>Owed ${fmt$0(stillToPay)}</span></div>
+      </div>
+    </div>`:`${periodStrip}
     <div class="hero ${leftToSpend<0?'hero-warn':''}">
       <div class="hero-main">
         <div class="hero-lab">Left to spend this month</div>
@@ -1210,7 +1248,12 @@ function renderTracker(events){
       </div>
     </div>`;
 
-  const cards=[
+  const cards=sharedMode?[
+    {lab:"Shared bills due",val:fmt$0(obligations),cls:"gold",dot:cv("--gold")},
+    {lab:"Paid so far",val:fmt$0(spent),cls:"pos",dot:cv("--sage")},
+    {lab:"Still owed",val:fmt$0(stillToPay),cls:stillToPay>0?"neg":"pos",dot:cv("--clay")},
+    {lab:"Bills",val:String(totalCount),cls:"info",dot:cv("--blue")},
+  ]:[
     {lab:"Expected income",val:fmt$0(incomeTotal),cls:"pos",dot:cv("--sage")},
     {lab:"Spent so far",val:fmt$0(spent),cls:"info",dot:cv("--blue")},
     {lab:"Still to pay",val:fmt$0(stillToPay),cls:"neg",dot:cv("--clay")},
@@ -1260,9 +1303,9 @@ function renderTracker(events){
   if(!rows.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing for ${monthLabel(selMonth)} yet — add an expense to start.</td></tr></tbody>`;}
   else{
     const allSel=tselable.length&&tselable.every(id=>tsel.has(id));
-    let bal=opening;
-    const body=rows.map(r=>{bal+=r.amt;return r.make(bal);}).join("");
-    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Pay date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r">Actual</th><th class="r">Paid</th><th class="r">Balance</th><th class="r"></th></tr></thead><tbody>${body}</tbody>`;
+    let bal=sharedMode?0:opening;
+    const body=rows.map(r=>{bal+=sharedMode?Math.abs(r.amt):r.amt;return r.make(bal);}).join("");
+    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Pay date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r">Actual</th><th class="r">Paid</th><th class="r">${sharedMode?'Running total':'Balance'}</th><th class="r"></th></tr></thead><tbody>${body}</tbody>`;
     makeSortable(tbl.querySelector("tbody"),".drag",newOrder=>{S.order[selMonth]=newOrder;saveState();});
   }
   renderTrackSelBar();
