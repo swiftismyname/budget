@@ -699,7 +699,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.4.0";
+const APP_VERSION = "4.5.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -941,9 +941,10 @@ function expandDates(frequency,days,itemStart,itemEnd,fStart,fEndExcl){
 function buildForecast(){
   const st=S.settings;const fStart=parseDate(st.startDate)||new Date();const fEndExcl=addMonths(fStart,Number(st.months)||6);
   let events=[];
-  S.bills.filter(b=>inLens(b)).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
+  S.bills.filter(b=>inLens(b)).forEach(b=>{const full=Math.abs(toNum(b.amount));if(!b.name||!full||!b.frequency)return;
+    const a=(LEDGER_MODE==="personal"&&b.shared)?full/2:full;   // shared bills: only your half hits your budget
     expandDates(b.frequency,parseDays(b.days),b.startDate||st.startDate,b.endDate,fStart,fEndExcl)
-      .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,itemId:b.id}));});
+      .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,fullAmount:full,shared:!!b.shared,itemId:b.id}));});
   S.income.filter(i=>inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
     expandDates(i.frequency,parseDays(i.days),i.startDate||st.startDate,i.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Income",name:i.source,group:i.group||"Income",category:"Income",amount:a,itemId:i.id}));});
@@ -1216,7 +1217,7 @@ function renderTracker(events){
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,amt:-eff,make:bal=>`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num neg">−${fmt$(eff)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,amt:-eff,make:bal=>`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}${e.shared?` · your half of ${fmt$(e.fullAmount)}`:``}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num neg">−${fmt$(eff)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
@@ -1760,49 +1761,48 @@ function renderSarah(events){
   // shared bills + this month's split
   const sharedBills=(S.bills||[]).filter(b=>b.shared);
   const monthEvents=events.filter(e=>e.monthKey===selMonth&&e.type==="Expense");
-  let sharedDue=0,sharedPaidMe=0,sharedPaidSarah=0;
+  let fullDue=0,halfDue=0,sharedPaidMe=0,sharedPaidSarah=0;
   monthEvents.forEach(e=>{
-    if(!sharedBills.some(b=>b.id===e.itemId))return;
-    const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);
-    sharedDue+=amt;
+    if(!e.shared)return;
+    const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);   // your half (or actual)
+    fullDue+=e.fullAmount||amt*2; halfDue+=amt;
     if(a.paid){if(a.by==="sarah")sharedPaidSarah+=amt;else sharedPaidMe+=amt;}
   });
   const sharedPaid=sharedPaidMe+sharedPaidSarah;
+  const halfLeft=halfDue-sharedPaid;
 
   document.getElementById("sarahHero").innerHTML=`
     <div class="hero">
       <div class="hero-main">
-        <div class="hero-lab">Shared bills · ${monthLabel(selMonth)}</div>
-        <div class="hero-val num gold">${fmt$0(sharedDue)}</div>
-        <div class="hero-sub">${sharedBills.length} shared bill${sharedBills.length===1?"":"s"} · ${fmt$0(sharedPaid)} covered so far${total>0?` · ${fmt$0(total)} given to Sarah all-time`:""}</div>
+        <div class="hero-lab">Your half of shared bills · ${monthLabel(selMonth)}</div>
+        <div class="hero-val num gold">${fmt$0(halfDue)}</div>
+        <div class="hero-sub">${fmt$0(fullDue)} total shared · your budget only carries your half${total>0?` · ${fmt$0(total)} given to Sarah all-time`:""}</div>
       </div>
       <div class="hero-bar-wrap">
-        <div class="hero-bar"><span class="seg paid" style="width:${sharedDue>0?Math.min(100,Math.round(sharedPaid/sharedDue*100)):0}%"></span></div>
+        <div class="hero-bar"><span class="seg paid" style="width:${halfDue>0?Math.min(100,Math.round(sharedPaid/halfDue*100)):0}%"></span></div>
         <div class="hero-legend">
-          <span><i style="background:var(--sage)"></i>You ${fmt$0(sharedPaidMe)}</span>
-          <span><i style="background:var(--lav)"></i>Sarah ${fmt$0(sharedPaidSarah)}</span>
-          <span><i style="background:var(--clay)"></i>Unpaid ${fmt$0(Math.max(0,sharedDue-sharedPaid))}</span>
+          <span><i style="background:var(--sage)"></i>Paid direct ${fmt$0(sharedPaidMe)}</span>
+          <span><i style="background:var(--lav)"></i>Given to Sarah ${fmt$0(sharedPaidSarah)}</span>
+          <span><i style="background:var(--clay)"></i>Still to cover ${fmt$0(Math.max(0,halfLeft))}</span>
         </div>
       </div>
     </div>`;
 
   document.getElementById("sharedKpis").innerHTML=[
-    {lab:"Shared this month",val:fmt$0(sharedDue),cls:"gold",dot:cv("--gold")},
-    {lab:"Your half",val:fmt$0(sharedDue/2),cls:"info",dot:cv("--blue")},
-    {lab:"You've paid",val:fmt$0(sharedPaidMe),cls:"pos",dot:cv("--sage")},
+    {lab:"Shared this month (full)",val:fmt$0(fullDue),cls:"gold",dot:cv("--gold")},
+    {lab:"Your half",val:fmt$0(halfDue),cls:"info",dot:cv("--blue")},
+    {lab:"Covered so far",val:fmt$0(sharedPaid),cls:"pos",dot:cv("--sage")},
     {lab:"Given to Sarah",val:fmt$0(total),cls:"neg",dot:cv("--lav")},
   ].map(c=>`<div class="kpi"><span class="dot" style="background:${c.dot}"></span><div class="lab">${c.lab}</div><div class="val num ${c.cls}">${c.val}</div></div>`).join("");
 
   // settle-up on the shared slice
   const settle=document.getElementById("sharedSettle");
-  if(sharedPaid>0){
-    const diff=(sharedPaidMe-sharedPaidSarah)/2;
-    let line;
-    if(Math.abs(diff)<0.005)line=`<b class="pos">All square</b> — you've each covered ${fmt$0(sharedPaid/2)}.`;
-    else if(diff>0)line=`<b class="pos">Sarah owes you ${fmt$0(diff)}</b> to split ${monthLabel(selMonth)} evenly.`;
-    else line=`<b class="neg">You owe Sarah ${fmt$0(-diff)}</b> to split ${monthLabel(selMonth)} evenly.`;
-    settle.innerHTML=`<div class="settle"><div class="settle-l"><span class="settle-tag">Settle up</span> ${line}</div>
-      <div class="settle-r"><span>You <b class="num">${fmt$0(sharedPaidMe)}</b></span><span>Sarah <b class="num">${fmt$0(sharedPaidSarah)}</b></span></div></div>`;
+  if(halfDue>0){
+    const line=halfLeft<=0.005
+      ? `<b class="pos">Your half is fully covered</b> for ${monthLabel(selMonth)}.`
+      : `<b class="${halfLeft>0?'neg':'pos'}">Still to cover ${fmt$0(halfLeft)}</b> of your ${fmt$0(halfDue)} half this month.`;
+    settle.innerHTML=`<div class="settle"><div class="settle-l"><span class="settle-tag">Your share</span> ${line}</div>
+      <div class="settle-r"><span>Paid direct <b class="num">${fmt$0(sharedPaidMe)}</b></span><span>Via Sarah <b class="num">${fmt$0(sharedPaidSarah)}</b></span></div></div>`;
   } else settle.innerHTML="";
 
   const sbt=document.getElementById("sharedBillsTable");
@@ -1812,13 +1812,13 @@ function renderSarah(events){
     const occRows=[];
     monthEvents.forEach(e=>{
       const b=sharedBills.find(x=>x.id===e.itemId);if(!b)return;
-      const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);
+      const a=getActualIn(e.monthKey,e.occId)||{};const amt=effAmount(e);   // your half
       const byVal=a.paid?(a.by==="sarah"?"sarah":"me"):"";
       occRows.push(`<tr class="${a.paid?'paidrow':''}">
         <td>${e.date.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</td>
         <td><b>${esc(e.name)}</b>${b.wedding?' <span class="pill wed">Wedding</span>':''}${a.by==="sarah"?' <span class="pill sarah">Sarah</span>':''}</td>
+        <td class="r num">${fmt$(e.fullAmount||amt*2)}</td>
         <td class="r num">${fmt$(amt)}</td>
-        <td class="r num">${fmt$(amt/2)}</td>
         <td class="r"><select class="inp" style="padding:6px 8px;width:150px" onchange="sharedSetBy('${e.monthKey}','${e.occId}',this.value)">
           <option value="" ${byVal===""?"selected":""}>— not paid —</option>
           <option value="me" ${byVal==="me"?"selected":""}>You paid</option>
@@ -1827,7 +1827,7 @@ function renderSarah(events){
         <td class="r"><button class="iconbtn" onclick="openItem('bill','${e.itemId}')">Edit</button></td></tr>`);
     });
     if(!occRows.length){sbt.innerHTML=`<tbody><tr><td class="empty">No shared bills land in ${monthLabel(selMonth)} — check their due dates.</td></tr></tbody>`;}
-    else sbt.innerHTML=`<thead><tr><th>Due</th><th>Bill</th><th class="r">Full</th><th class="r">Half</th><th class="r">Paid by</th><th class="r"></th></tr></thead><tbody>${occRows.join("")}</tbody>`;
+    else sbt.innerHTML=`<thead><tr><th>Due</th><th>Bill</th><th class="r">Full bill</th><th class="r">Your half</th><th class="r">Paid by</th><th class="r"></th></tr></thead><tbody>${occRows.join("")}</tbody>`;
   }
 
   const t=document.getElementById("sarahTable");
