@@ -465,7 +465,6 @@
     <button data-tab="dashboard" class="active" onclick="go('dashboard')">Dashboard</button>
     <button data-tab="tracker" onclick="go('tracker')">This Month</button>
     <button data-tab="forecast" onclick="go('forecast')">Forecast</button>
-    <button data-tab="history" onclick="go('history')">History</button>
     <button data-tab="bills" onclick="go('bills')">Bills</button>
     <button data-tab="income" onclick="go('income')">Income</button>
     <button data-tab="sarah" id="navSarah" onclick="go('sarah')">Shared</button>
@@ -489,7 +488,6 @@
       <div class="sheet-title">More</div>
       <div class="sheet-grid">
         <button onclick="goMore('forecast')"><span>Forecast</span></button>
-        <button onclick="goMore('history')"><span>History</span></button>
         <button onclick="goMore('bills')"><span>Bills</span></button>
         <button onclick="goMore('income')"><span>Income</span></button>
         <button id="moreSarah" onclick="goMore('sarah')"><span>Shared</span></button>
@@ -574,12 +572,10 @@
     </div>
 
     <div class="panel scrollx"><table id="fcTable"></table></div>
-  </section>
 
-  <!-- HISTORY -->
-  <section id="view-history" class="hide">
+    <div class="divider" style="margin:26px 0 18px"></div>
     <div class="sec-h">
-      <div><h2>History &amp; trends</h2><div class="desc">Log what you actually paid in past months — utilities, groceries, anything variable — to see whether it's creeping up or down. This is reference only; it doesn't affect your forecast or income.</div></div>
+      <div><h2 style="font-size:24px">Past months</h2><div class="desc">What your bills actually ran in past months — spot the trends.</div></div>
       <div class="toolbar">
         <label class="muted" style="font-size:12px">Months back
           <input id="histMonths" class="inp" type="number" min="1" max="12" style="width:70px;display:inline-block;margin-left:6px" onchange="setHistMonths(this.value)">
@@ -595,10 +591,11 @@
     <div class="panel scrollx"><table id="histTable"></table></div>
   </section>
 
+
   <!-- BILLS -->
   <section id="view-bills" class="hide">
     <div class="sec-h">
-      <div><h2>Bills &amp; outflows</h2><div class="desc">Recurring expenses, debt and savings. Select a few to edit them together.</div></div>
+      <div><h2>Bills &amp; outflows</h2><div class="desc">Every bill here is always counted and lands on This Month by its due date. The checkboxes are only for bulk edits — select several to mark shared or delete together.</div></div>
       <button class="btn" id="addBillBtn" onclick="openItem('bill')">+ Add bill</button>
     </div>
     <div id="billsNote" class="desc" style="margin:-4px 0 12px;color:var(--lav)"></div>
@@ -702,7 +699,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.2.0";
+const APP_VERSION = "4.3.1";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -927,10 +924,10 @@ function expandDates(frequency,days,itemStart,itemEnd,fStart,fEndExcl){
   const hardEnd=itemEnd?minD(parseDate(itemEnd),addDays(fEndExcl,-1)):null;
   if(f==="one-time"||f==="onetime"){const d=parseDate(itemStart);if(d&&d>=fStart&&d<fEndExcl&&(!hardEnd||d<=hardEnd))out.push(d);return out;}
   if(f==="weekly"||f==="biweekly"){const step=f==="weekly"?7:14;let d=parseDate(itemStart);if(!d)return out;while(d<fStart)d=addDays(d,step);while(d<fEndExcl){if(!hardEnd||d<=hardEnd)out.push(d);d=addDays(d,step);}return out;}
-  let dayList=days.slice();
   const stepMonths=f==="monthly"?1:f==="bimonthly"?2:f==="quarterly"?3:(f==="annually"||f==="yearly")?12:1;
-  if(f==="semimonthly"&&!dayList.length)dayList=[1,15];
-  if(!dayList.length){const a=parseDate(itemStart);dayList=[a?a.getDate():1];}   // anchor date sets the due day
+  let dayList;
+  if(f==="semimonthly"){dayList=days.slice();if(!dayList.length)dayList=[1,15];}
+  else{const a=parseDate(itemStart);dayList=[a?a.getDate():(days[0]||1)];}   // the bill's date IS the due day, every cycle
   let cur=new Date(start.getFullYear(),start.getMonth(),1);
   const anchor=new Date(iStart.getFullYear(),iStart.getMonth(),1);
   while(cur<fEndExcl){
@@ -944,10 +941,10 @@ function expandDates(frequency,days,itemStart,itemEnd,fStart,fEndExcl){
 function buildForecast(){
   const st=S.settings;const fStart=parseDate(st.startDate)||new Date();const fEndExcl=addMonths(fStart,Number(st.months)||6);
   let events=[];
-  S.bills.filter(b=>b.active&&inLens(b)).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
+  S.bills.filter(b=>inLens(b)).forEach(b=>{const a=Math.abs(toNum(b.amount));if(!b.name||!a||!b.frequency)return;
     expandDates(b.frequency,parseDays(b.days),b.startDate||st.startDate,b.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Expense",name:b.name,group:b.group||"Bills",category:b.category||b.group||"Other",amount:a,itemId:b.id}));});
-  S.income.filter(i=>i.active&&inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
+  S.income.filter(i=>inLens(i)).forEach(i=>{const a=Math.abs(toNum(i.amount));if(!i.source||!a||!i.frequency)return;
     expandDates(i.frequency,parseDays(i.days),i.startDate||st.startDate,i.endDate,fStart,fEndExcl)
       .forEach(d=>events.push({date:d,type:"Income",name:i.source,group:i.group||"Income",category:"Income",amount:a,itemId:i.id}));});
   events.sort((a,b)=>a.date-b.date||(a.type===b.type?0:a.type==="Income"?-1:1));
@@ -998,8 +995,7 @@ function drillToMonth(key){selMonth=key;const ms=document.getElementById("monthS
 function renderAll(){const events=buildForecast();const keys=monthKeys(events);populateMonthSelect(keys);
   if(activeTab==="dashboard")renderDashboard(events,keys);
   if(activeTab==="tracker")renderTracker(events);
-  if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);}
-  if(activeTab==="history")renderHistory();
+  if(activeTab==="forecast"){buildFcFilter(keys);renderForecastView(events,keys);renderHistory();}
   if(activeTab==="sarah")renderSarah(events);
   if(activeTab==="wedding")renderWedding();
   if(activeTab==="bills")renderBills();
@@ -1214,24 +1210,24 @@ function renderTracker(events){
   const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
-  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}" class="${inPeriod(e.date)?'inperiod':''} payrow"><td></td>${H}<td>${shortD(e.date)}</td><td>💰 ${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
+  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,amt:e.amount,make:bal=>`<tr data-rowid="${e.occId}" class="${inPeriod(e.date)?'inperiod':''} payrow"><td></td>${H}<td>${shortD(e.date)}</td><td>💰 ${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td></td><td class="r num">${fmt$(bal)}</td></tr>`}));
   expenses.forEach(e=>{
     const a=getActualIn(e.monthKey,e.occId)||{paid:false,actual:null,by:null};
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,amt:-eff,make:bal=>`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num neg">−${fmt$(eff)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
-    rows.push({id:x.id,sort:d,html:`<tr data-rowid="${x.id}" class="${x.paid?'paidrow':''}">${selCell(x.id)}${H}
+    rows.push({id:x.id,sort:d,amt:-toNum(x.amount),make:bal=>`<tr data-rowid="${x.id}" class="${x.paid?'paidrow':''}">${selCell(x.id)}${H}
       <td><input class="inp paydate" type="date" value="${x.date||''}" onchange="editAdhoc('${x.id}','date',this.value)"></td>
       <td><span class="rec-link" onclick="openTrackRecord('${x.id}')">${esc(x.name)||'<span class="muted">Unplanned</span>'}</span>${byChip(x.by)}<div class="due-sub">unplanned</div></td>
       <td><input class="inp" value="${esc(x.category||'')}" placeholder="category" style="width:120px;padding:5px 8px" oninput="editAdhoc('${x.id}','category',this.value)"></td>
-      <td class="r muted">—</td>
+      <td class="r num neg">−${fmt$(toNum(x.amount))}</td>
       <td class="r"><input class="actin" type="number" step="0.01" placeholder="0" value="${x.amount||''}" onchange="editAdhoc('${x.id}','amount',this.value)"></td>
-      <td class="r num muted">—</td>
       <td class="r"><input class="chk" type="checkbox" ${x.paid?'checked':''} onchange="editAdhoc('${x.id}','paid',this.checked)"></td>
+      <td class="r num ${bal<0?'neg':''}">${fmt$(bal)}</td>
       <td class="r"><button class="iconbtn" onclick="openTrackRecord('${x.id}')">Open</button></td></tr>`});
   });
   const ord=(S.order||{})[selMonth]||[];
@@ -1241,7 +1237,9 @@ function renderTracker(events){
   if(!rows.length){tbl.innerHTML=`<tbody><tr><td class="empty">Nothing for ${monthLabel(selMonth)} yet — add an expense to start.</td></tr></tbody>`;}
   else{
     const allSel=tselable.length&&tselable.every(id=>tsel.has(id));
-    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Pay date</th><th>Item</th><th>Category</th><th class="r">Budget</th><th class="r">Actual</th><th class="r">+/−</th><th class="r">Paid</th><th class="r"></th></tr></thead><tbody>${rows.map(r=>r.html).join("")}</tbody>`;
+    let bal=opening;
+    const body=rows.map(r=>{bal+=r.amt;return r.make(bal);}).join("");
+    tbl.innerHTML=`<thead><tr><th style="width:24px" class="r"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="tselAll(this.checked)"></th><th style="width:24px"></th><th>Pay date</th><th>Item</th><th>Category</th><th class="r">Amount</th><th class="r">Actual</th><th class="r">Paid</th><th class="r">Balance</th><th class="r"></th></tr></thead><tbody>${body}</tbody>`;
     makeSortable(tbl.querySelector("tbody"),".drag",newOrder=>{S.order[selMonth]=newOrder;saveState();});
   }
   renderTrackSelBar();
@@ -1403,7 +1401,7 @@ function renderBills(){
   const bills=S.bills.filter(inLens);
   if(!bills.length){t.innerHTML=`<tbody><tr><td class="empty">No bills yet.</td></tr></tbody>`;return;}
   const allSel=bills.every(b=>sel.has(b.id));
-  const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
+  const rows=bills.map(b=>`<tr>
     <td><input class="chk" type="checkbox" ${sel.has(b.id)?'checked':''} onchange="toggleSel('${b.id}',this.checked)"></td>
     <td>${esc(b.name)}${weddingChip(b)}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
     <td>${esc(b.category)}</td><td class="r num">${fmt$(toNum(b.amount))}</td>
@@ -1436,12 +1434,10 @@ function renderBulkBar(){
 function bulkDelete(){if(!confirm(`Delete ${sel.size} selected bill(s)? This can't be undone.`))return;const n=sel.size;S.bills=S.bills.filter(b=>!sel.has(b.id));sel.clear();saveState();renderBills();toast(`Deleted ${n} bills`);}
 function bulkSet(field,val){if(!val)return;const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b[field]=val;});saveState();renderBills();toast(`Updated ${n} bills`);}
 function bulkShared(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b.shared=v;});saveState();renderAll();toast(`${v?"Marked shared":"Unmarked"}: ${n} bills`);}
-function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
 
 function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(inLens);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">No income yet.</td></tr></tbody>`;return;}
-  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
+  const rows=inc.map(i=>`<tr><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
   t.innerHTML=`<thead><tr><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
-function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
 function delItem(kind,id){if(!confirm("Delete this item?"))return;if(kind==="bill")S.bills=S.bills.filter(x=>x.id!==id);else S.income=S.income.filter(x=>x.id!==id);saveState();renderAll();}
 
 const FREQS=["One-time","Weekly","Biweekly","Semimonthly","Monthly","Bimonthly","Quarterly","Annually"];
@@ -1807,7 +1803,7 @@ function renderSarah(events){
   const sbt=document.getElementById("sharedBillsTable");
   if(!sharedBills.length){sbt.innerHTML=`<tbody><tr><td class="empty">No shared bills yet. Open any bill and tick "Shared with Sarah."</td></tr></tbody>`;}
   else{
-    const sbRows=sharedBills.map(b=>{const amt=toNum(b.amount);return `<tr style="${b.active?'':'opacity:.5'}">
+    const sbRows=sharedBills.map(b=>{const amt=toNum(b.amount);return `<tr>
       <td><b>${esc(b.name)}</b>${b.wedding?' <span class="pill wed">Wedding</span>':''}</td>
       <td><span class="pill ${grpClass(b.group)}">${esc(b.category)}</span></td>
       <td>${esc(b.frequency)}</td>
@@ -1965,6 +1961,10 @@ function runMigrations(){
   S.wedding=S.wedding||{budget:0,items:[]};
   if(!Array.isArray(S.wedding.items))S.wedding.items=[];
   S.order=S.order||{};
+  (S.bills||[]).forEach(b=>{b.active=true;
+    const f=String(b.frequency||"").toLowerCase();
+    if(["monthly","bimonthly","quarterly","annually","yearly"].includes(f)){const d=parseDate(b.startDate);if(d)b.days=String(d.getDate());}
+  });(S.income||[]).forEach(i=>{i.active=true;});
   if(!S.settings.theme)S.settings.theme="light";
   if(!S.migrations.endDate2027){S.bills.forEach(b=>{b.endDate=BILL_END;});S.migrations.endDate2027=true;}
   if(!S.migrations.noEndAnd2yr){
