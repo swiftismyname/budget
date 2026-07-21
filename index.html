@@ -76,6 +76,13 @@
   .settle-tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--lav);font-weight:700;margin-right:6px}
   .settle-r{display:flex;gap:16px;color:var(--text-dim);font-size:12.5px}
   .settle-r b{color:var(--text)}
+  .pstrip{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--blue-soft);border:1px solid var(--line);border-radius:14px;padding:11px 16px;margin-bottom:12px;font-size:13.5px}
+  .pstrip-lab{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);font-weight:700;display:block;margin-bottom:3px}
+  .pstrip b{font-size:17px;margin-right:4px}
+  .pstrip-sub{color:var(--text-dim);font-size:12px}
+  tr.inperiod td{background:var(--blue-soft)}
+  tr.inperiod.paidrow td{background:var(--sage-soft)}
+  tr.payrow td{font-weight:600}
   .rec-link{font-weight:600;cursor:pointer;border-bottom:1px dotted var(--line2)}
   .rec-link:hover{color:var(--accent);border-bottom-color:var(--accent)}
   .due-sub{font-size:11px;color:var(--text-faint);margin-top:2px}
@@ -513,13 +520,10 @@
   <!-- TRACKER -->
   <section id="view-tracker" class="hide">
     <div class="sec-h">
-      <div><h2 id="trackTitle">This Month</h2><div class="desc">Tick bills off as you pay them. Bills come from the Bills tab and land here on their due date.</div></div>
+      <div><h2 id="trackTitle">This Month</h2><div class="desc">The whole month, with your current pay period highlighted. Bills come from the Bills tab and land on their due date.</div></div>
       <div class="periodnav">
-        <div class="lenstog" style="box-shadow:none">
-          <button class="active" id="tmMonth" onclick="setTrackMode('month')">Month</button>
-          <button id="tmPeriod" onclick="setTrackMode('period')">Pay period</button>
-        </div>
-        <span id="trackNav" style="display:none">
+        <span class="muted" style="font-size:11px">Pay period</span>
+        <span id="trackNav">
           <button class="iconbtn" onclick="payStep(-1)">‹</button>
           <button class="iconbtn" onclick="payStep(1)">›</button>
           <button class="iconbtn" onclick="payToday()">Today</button>
@@ -698,7 +702,7 @@ const cloudEnvUrl = "https://gtbsjtllhjdpdvmakldr.supabase.co";  // optional def
 const cloudEnvKey = "";                                          // optional default (sb_publishable_…)
 /* ========================================================================= */
 
-const APP_VERSION = "4.1.0";
+const APP_VERSION = "4.2.0";
 /* LEDGER_MODE selects which copy this is: "personal" (your own, seeded) or
    "shared" (empty, shared with Sarah). It's the ONLY line that differs
    between the two builds. */
@@ -1125,32 +1129,23 @@ function getActualIn(mk,occId){const m=S.actuals[mk]||{};return m[occId]||null;}
 function setActualIn(mk,occId,patch){if(!S.actuals[mk])S.actuals[mk]={};S.actuals[mk][occId]=Object.assign({paid:false,actual:null},S.actuals[mk][occId],patch);saveState();}
 function effAmount(e){const a=getActualIn(e.monthKey,e.occId);return (a&&a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;}
 function setActual(occId,patch){if(!S.actuals[selMonth])S.actuals[selMonth]={};S.actuals[selMonth][occId]=Object.assign({paid:false,actual:null},S.actuals[selMonth][occId],patch);saveState();}
-let trackMode="month";   // "month" | "period"
-function setTrackMode(m){trackMode=m;renderTracker(buildForecast());}
 function renderTracker(events){
   const keys=monthKeys(events);
-  let mEvents,windowLabel,periodCur=null,opening=0;
-  if(trackMode==="period"){
-    const ps=payPeriods(events);
-    if(ps.length){periodCur=ps[payIndex(ps)];mEvents=events.filter(e=>e.date>=periodCur.start&&(periodCur.end?e.date<periodCur.end:true));
-      const today=new Date();today.setHours(0,0,0,0);
-      const isNow=today>=periodCur.start&&(periodCur.end?today<periodCur.end:true);
-      windowLabel=periodLabel(periodCur)+(isNow?" · now":"");
-    } else {mEvents=[];windowLabel="No paychecks yet";}
-  } else {
-    mEvents=events.filter(e=>e.monthKey===selMonth);
-    windowLabel=monthLabel(selMonth);
-    opening=monthOpening(events,selMonth,keys);
-  }
-  document.getElementById("trackTitle").textContent=trackMode==="period"?"Pay period":"This Month";
-  document.getElementById("trackListTitle").textContent=windowLabel;
-  const nav=document.getElementById("trackNav");if(nav)nav.style.display=trackMode==="period"?"inline-flex":"none";
-  const pp=document.getElementById("payChartPanel");if(pp)pp.style.display=trackMode==="period"?"":"none";
-  document.getElementById("tmMonth").classList.toggle("active",trackMode==="month");
-  document.getElementById("tmPeriod").classList.toggle("active",trackMode==="period");
+  const mEvents=events.filter(e=>e.monthKey===selMonth);
+  const opening=monthOpening(events,selMonth,keys);
+  document.getElementById("trackTitle").textContent=monthLabel(selMonth);
+  document.getElementById("trackListTitle").textContent=monthLabel(selMonth);
+  const pp=document.getElementById("payChartPanel");if(pp)pp.style.display="";
+  // current (or navigated) pay period, for the highlight + hero
+  const ps=payPeriods(events);
+  const periodCur=ps.length?ps[payIndex(ps)]:null;
+  const inPeriod=d=>periodCur&&d>=periodCur.start&&(periodCur.end?d<periodCur.end:true);
+  let pDue=0,pPaid=0;
+  if(periodCur)periodCur.expenses.forEach(e=>{const a=getActualIn(e.monthKey,e.occId)||{};const amt=(a.actual!=null&&a.actual!=="")?toNum(a.actual):e.amount;pDue+=amt;if(a.paid)pPaid+=amt;});
+  const pLeft=periodCur?periodCur.income-pDue:0;
   const expenses=mEvents.filter(e=>e.type==="Expense");
   const incomes=mEvents.filter(e=>e.type==="Income");
-  const adhoc=trackMode==="month"?(S.adhoc[selMonth]||[]):[];
+  const adhoc=(S.adhoc[selMonth]||[]);
   const incomeTotal=incomes.reduce((s,e)=>s+e.amount,0);
 
   // prune stale selections; reset per-render maps
@@ -1170,18 +1165,25 @@ function renderTracker(events){
   });
   tsel.forEach(id=>{if(!tselable.includes(id))tsel.delete(id);});
 
-  const available=trackMode==="period"?incomeTotal:(opening+incomeTotal);
+  const available=opening+incomeTotal;
   const leftToSpend=available-obligations;
   const cushionCls=leftToSpend<0?"neg":(leftToSpend<200?"gold":"pos");
   const spentPctOfAvail=available>0?Math.max(0,Math.min(100,Math.round(spent/available*100))):0;
   const owedPct=available>0?Math.max(0,Math.min(100,Math.round(stillToPay/available*100))):0;
   const sarahLeg=paidBySarah>0?`<span><i style="background:var(--lav)"></i>Sarah ${fmt$0(paidBySarah)}</span>`:"";
-  document.getElementById("spendHero").innerHTML=`
+  const pClsHero=pLeft<0?"neg":(pLeft<150?"gold":"pos");
+  const periodStrip=periodCur?`
+    <div class="pstrip">
+      <div><span class="pstrip-lab">Pay period · ${periodLabel(periodCur)}${(function(){const t=new Date();t.setHours(0,0,0,0);return t>=periodCur.start&&(periodCur.end?t<periodCur.end:true);})()?' <span class="pill savings">now</span>':''}</span>
+      <b class="num ${pClsHero}">${fmt$0(pLeft)}</b> left after its bills</div>
+      <div class="pstrip-sub">${fmt$0(periodCur.income)} paycheck − ${fmt$0(pDue)} due · ${fmt$0(pPaid)} already paid</div>
+    </div>`:"";
+  document.getElementById("spendHero").innerHTML=`${periodStrip}
     <div class="hero ${leftToSpend<0?'hero-warn':''}">
       <div class="hero-main">
-        <div class="hero-lab">${trackMode==="period"?"Left after this period bills":"Left to spend this month"}</div>
+        <div class="hero-lab">Left to spend this month</div>
         <div class="hero-val num ${cushionCls}">${fmt$0(leftToSpend)}</div>
-        <div class="hero-sub">${fmt$0(available)} ${trackMode==="period"?"paycheck":"available"} − ${fmt$0(obligations)} in bills${leftToSpend<0?" · over by "+fmt$0(-leftToSpend):""}</div>
+        <div class="hero-sub">${fmt$0(available)} available − ${fmt$0(obligations)} in bills${leftToSpend<0?" · over by "+fmt$0(-leftToSpend):""}</div>
       </div>
       <div class="hero-bar-wrap">
         <div class="hero-bar"><span class="seg paid" style="width:${spentPctOfAvail}%"></span><span class="seg owed" style="width:${owedPct}%"></span></div>
@@ -1212,13 +1214,13 @@ function renderTracker(events){
   const shortD=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const selCell=id=>`<td class="r"><input class="chk seltick" type="checkbox" ${tsel.has(id)?'checked':''} onchange="tselToggle('${id}',this.checked)"></td>`;
   const byChip=by=>by==="sarah"?` <span class="pill sarah">Sarah</span>`:"";
-  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}"><td></td>${H}<td>${shortD(e.date)}</td><td>${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
+  incomes.forEach(e=>rows.push({id:e.occId,sort:e.date,html:`<tr data-rowid="${e.occId}" class="${inPeriod(e.date)?'inperiod':''} payrow"><td></td>${H}<td>${shortD(e.date)}</td><td>💰 ${esc(e.name)}</td><td><span class="pill income">Income</span></td><td class="r num pos">+${fmt$(e.amount)}</td><td></td><td class="r num"></td><td></td><td></td></tr>`}));
   expenses.forEach(e=>{
     const a=getActualIn(e.monthKey,e.occId)||{paid:false,actual:null,by:null};
     const actualVal=(a.actual!=null&&a.actual!=="")?a.actual:"";const eff=actualVal!==""?toNum(actualVal):e.amount;const variance=a.paid?(eff-e.amount):0;const vcls=variance>0?"var-over":(variance<0?"var-under":"muted");const vtxt=a.paid&&variance!==0?(variance>0?"+":"−")+fmt$(Math.abs(variance)):"—";
     const payDate=a.payDate||ymd(e.date);const payD=parseDate(payDate)||e.date;
     const late=parseDate(payDate)>e.date;
-    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
+    rows.push({id:e.occId,sort:payD,html:`<tr data-rowid="${e.occId}" class="${a.paid?'paidrow':''} ${inPeriod(e.date)?'inperiod':''}">${selCell(e.occId)}${H}<td><input class="inp paydate" type="date" value="${payDate}" onchange="onPayDate('${e.monthKey}','${e.occId}',this.value)"></td><td><span class="rec-link" onclick="openTrackRecord('${e.occId}')">${esc(e.name)}</span>${byChip(a.by)}<div class="due-sub ${late?'due-late':''}">due ${shortD(e.date)}</div></td><td><span class="pill ${grpClass(e.group)}">${esc(e.category)}</span></td><td class="r num">${fmt$(e.amount)}</td><td class="r"><input class="actin" type="number" step="0.01" placeholder="${Math.round(e.amount)}" value="${actualVal}" onchange="onActual('${e.monthKey}','${e.occId}',this.value)"></td><td class="r num ${vcls}">${vtxt}</td><td class="r"><input class="chk" type="checkbox" ${a.paid?'checked':''} onchange="onPaid('${e.monthKey}','${e.occId}',this.checked)"></td><td class="r"><button class="iconbtn" onclick="openTrackRecord('${e.occId}')">Open</button></td></tr>`});
   });
   adhoc.forEach(x=>{
     const d=parseDate(x.date)||parseDate(selMonth+"-15");
@@ -1243,7 +1245,7 @@ function renderTracker(events){
     makeSortable(tbl.querySelector("tbody"),".drag",newOrder=>{S.order[selMonth]=newOrder;saveState();});
   }
   renderTrackSelBar();
-  if(trackMode==="period"){const ps=payPeriods(events);if(ps.length)drawPay(ps,periodCur);}
+  if(ps.length)drawPay(ps,periodCur);
 }
 function renderTrackSelBar(){
   const bar=document.getElementById("trackSelBar");if(!bar)return;
@@ -1403,14 +1405,13 @@ function renderBills(){
   const allSel=bills.every(b=>sel.has(b.id));
   const rows=bills.map(b=>`<tr style="${b.active?'':'opacity:.5'}">
     <td><input class="chk" type="checkbox" ${sel.has(b.id)?'checked':''} onchange="toggleSel('${b.id}',this.checked)"></td>
-    <td><input class="chk" type="checkbox" title="Active" ${b.active?'checked':''} onchange="toggleActive('bill','${b.id}',this.checked)"></td>
     <td>${esc(b.name)}${weddingChip(b)}</td><td><span class="pill ${grpClass(b.group)}">${esc(b.group)}</span></td>
     <td>${esc(b.category)}</td><td class="r num">${fmt$(toNum(b.amount))}</td>
     <td>${esc(b.frequency)}${b.days?` · ${esc(b.days)}`:""}</td>
     <td>${b.endDate?fmtDate(parseDate(b.endDate)):"—"}</td>
     <td class="r"><button class="iconbtn" onclick="openItem('bill','${b.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('bill','${b.id}')">×</button></td>
   </tr>`).join("");
-  t.innerHTML=`<thead><tr><th style="width:30px"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="toggleSelAll(this.checked)"></th><th style="width:30px">On</th><th>Name</th><th>Group</th><th>Category</th><th class="r">Amount</th><th>Frequency</th><th>Ends</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;
+  t.innerHTML=`<thead><tr><th style="width:30px"><input class="chk" type="checkbox" ${allSel?'checked':''} onchange="toggleSelAll(this.checked)"></th><th>Name</th><th>Group</th><th>Category</th><th class="r">Amount</th><th>Frequency</th><th>Ends</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;
 }
 function toggleSel(id,c){if(c)sel.add(id);else sel.delete(id);renderBills();}
 function toggleSelAll(c){if(c)S.bills.forEach(b=>sel.add(b.id));else sel.clear();renderBills();}
@@ -1426,8 +1427,6 @@ function renderBulkBar(){
     <select onchange="bulkSet('frequency',this.value);this.selectedIndex=0"><option value="">Set frequency…</option>${freqs.map(f=>`<option>${f}</option>`).join("")}</select>
     <label style="font-size:12px;color:var(--sage);font-weight:600">End date <input type="date" onchange="bulkSet('endDate',this.value)"></label>
     <span class="sep"></span>
-    <button class="iconbtn" onclick="bulkActive(true)">Activate</button>
-    <button class="iconbtn" onclick="bulkActive(false)">Pause</button>
     <button class="iconbtn" onclick="bulkShared(true)">Mark shared</button>
     <button class="iconbtn" onclick="bulkShared(false)">Not shared</button>
     <button class="iconbtn del" onclick="bulkDelete()">Delete</button>
@@ -1440,8 +1439,8 @@ function bulkShared(v){const n=sel.size;S.bills.forEach(b=>{if(sel.has(b.id))b.s
 function bulkActive(v){S.bills.forEach(b=>{if(sel.has(b.id))b.active=v;});saveState();renderBills();toast(`${v?'Activated':'Paused'} ${sel.size} bills`);}
 
 function renderIncome(){const t=document.getElementById("incomeTable");const inc=S.income.filter(inLens);if(!inc.length){t.innerHTML=`<tbody><tr><td class="empty">No income yet.</td></tr></tbody>`;return;}
-  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td><input class="chk" type="checkbox" ${i.active?'checked':''} onchange="toggleActive('income','${i.id}',this.checked)"></td><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
-  t.innerHTML=`<thead><tr><th style="width:30px">On</th><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
+  const rows=inc.map(i=>`<tr style="${i.active?'':'opacity:.5'}"><td>${esc(i.source)}</td><td class="r num pos">${fmt$(toNum(i.amount))}</td><td>${esc(i.frequency)}${i.days?` · ${esc(i.days)}`:""}</td><td>${i.startDate?fmtDate(parseDate(i.startDate)):""}</td><td class="r"><button class="iconbtn" onclick="openItem('income','${i.id}')">Edit</button> <button class="iconbtn del" onclick="delItem('income','${i.id}')">×</button></td></tr>`).join("");
+  t.innerHTML=`<thead><tr><th>Source</th><th class="r">Amount</th><th>Frequency</th><th>Anchor</th><th class="r"></th></tr></thead><tbody>${rows}</tbody>`;}
 function toggleActive(kind,id,v){const arr=kind==="bill"?S.bills:S.income;const it=arr.find(x=>x.id===id);if(it){it.active=v;saveState();renderAll();}}
 function delItem(kind,id){if(!confirm("Delete this item?"))return;if(kind==="bill")S.bills=S.bills.filter(x=>x.id!==id);else S.income=S.income.filter(x=>x.id!==id);saveState();renderAll();}
 
@@ -1449,30 +1448,39 @@ const FREQS=["One-time","Weekly","Biweekly","Semimonthly","Monthly","Bimonthly",
 const BILL_GROUPS=["Bills","Debt","Savings","Subscriptions","Other"];const INCOME_GROUPS=["Income","Other"];
 function openItem(kind,id){
   const isBill=kind==="bill";const arr=isBill?S.bills:S.income;
-  const it=id?Object.assign({},arr.find(x=>x.id===id)):(isBill?{name:"",group:"Bills",category:"",amount:"",frequency:"Monthly",days:"1",startDate:S.settings.startDate,endDate:BILL_END,notes:""}:{source:"",group:"Income",amount:"",frequency:"Biweekly",days:"",startDate:S.settings.startDate,endDate:"",notes:""});
-  const groups=isBill?BILL_GROUPS:INCOME_GROUPS;const nameVal=isBill?it.name:it.source;const dayLabel=isBill?"Due day(s)":"Pay day(s)";
+  const todayISO=ymd(new Date());
+  const it=id?Object.assign({},arr.find(x=>x.id===id)):(isBill?{name:"",group:"Bills",category:"",amount:"",frequency:"Monthly",days:"",startDate:todayISO,endDate:"",notes:""}:{source:"",group:"Income",amount:"",frequency:"Biweekly",days:"",startDate:todayISO,endDate:"",notes:""});
+  const groups=isBill?BILL_GROUPS:INCOME_GROUPS;const nameVal=isBill?it.name:it.source;
+  const isSemi=String(it.frequency).toLowerCase()==="semimonthly";
   document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>${id?'Edit':'New'} ${isBill?'bill':'income'}</h3>
     <div class="form-grid">
       <div class="field" style="grid-column:span 2"><label>${isBill?'Name':'Source'}</label><input id="f_name" class="inp" value="${esc(nameVal||'')}"></div>
       <div class="field"><label>Group</label><select id="f_group" class="inp">${groups.map(g=>`<option ${g===it.group?'selected':''}>${g}</option>`).join("")}</select></div>
       <div class="field"><label>Amount</label><input id="f_amount" class="inp" type="number" step="0.01" value="${it.amount}"></div>
       ${isBill?`<div class="field"><label>Category</label><input id="f_category" class="inp" value="${esc(it.category||'')}"></div>`:``}
-      <div class="field"><label>Frequency</label><select id="f_freq" class="inp">${FREQS.map(f=>`<option ${f.toLowerCase()===String(it.frequency).toLowerCase()?'selected':''}>${f}</option>`).join("")}</select></div>
-      <div class="field"><label>${dayLabel} <span class="muted" style="text-transform:none;letter-spacing:0">(e.g. 1 or 1,15)</span></label><input id="f_days" class="inp" value="${esc(it.days||'')}"></div>
-      <div class="field"><label>${isBill?'Start / anchor':'First pay date'}</label><input id="f_start" class="inp" type="date" value="${it.startDate||''}"></div>
+      <div class="field"><label>Frequency</label><select id="f_freq" class="inp" onchange="freqChanged()">${FREQS.map(f=>`<option ${f.toLowerCase()===String(it.frequency).toLowerCase()?'selected':''}>${f}</option>`).join("")}</select></div>
+      <div class="field"><label>${isBill?'Due date':'First pay date'} <span class="muted" style="text-transform:none;letter-spacing:0">(repeats from here)</span></label><input id="f_start" class="inp" type="date" value="${it.startDate||''}"></div>
+      <div class="field ${isSemi?'':'hide'}" id="f_daysWrap"><label>${isBill?'Due days':'Pay days'} <span class="muted" style="text-transform:none;letter-spacing:0">(e.g. 1,15)</span></label><input id="f_days" class="inp" value="${esc(it.days||'')}" placeholder="1,15"></div>
       <div class="field"><label>End date <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="f_end" class="inp" type="date" value="${it.endDate||''}"></div>
       <div class="field" style="grid-column:span 2"><label>Notes</label><input id="f_notes" class="inp" value="${esc(it.notes||'')}"></div>
     </div>
     ${LEDGER_MODE==="personal"?`<label class="sharedtoggle"><input id="f_shared" type="checkbox" class="chk" ${it.shared?'checked':''}><span>Shared with Sarah <span class="muted" style="font-weight:400">— counts toward the split on the Shared tab</span></span></label>`:''}
     ${(kind==="bill"&&LEDGER_MODE==="personal")?`<label class="sharedtoggle" style="background:var(--gold-soft)"><input id="f_wedding" type="checkbox" class="chk" ${it.wedding?'checked':''}><span>Wedding-related <span class="muted" style="font-weight:400">— tags this as a wedding expense you can filter on</span></span></label>`:''}
-    <div class="muted" style="font-size:11.5px;margin-top:12px">Weekly/biweekly repeat from the anchor date. Monthly-type frequencies use the due day(s); semimonthly defaults to the 1st &amp; 15th; bimonthly = every other month.</div>
+    <div class="muted" style="font-size:11.5px;margin-top:12px">The date you pick is when it's due — monthly-type bills repeat on that same day each cycle; weekly/biweekly count from it. Semimonthly uses the two due days instead.</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveItem('${kind}','${id||''}')">Save</button></div>
   </div></div>`;
 }
+function freqChanged(){const f=(document.getElementById("f_freq").value||"").toLowerCase();const w=document.getElementById("f_daysWrap");if(w)w.classList.toggle("hide",f!=="semimonthly");}
 function closeModal(){document.getElementById("modalRoot").innerHTML="";}
 function saveItem(kind,id){const isBill=kind==="bill";const v=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};const name=v("f_name");if(!name){toast("Give it a name");return;}
   const wedEl=document.getElementById("f_wedding"),shEl=document.getElementById("f_shared");
-  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:v("f_freq"),days:v("f_days"),startDate:v("f_start"),endDate:v("f_end"),notes:v("f_notes"),wedding:!!(wedEl&&wedEl.checked),shared:!!(shEl&&shEl.checked)};
+  const freq=v("f_freq");const fLow=freq.toLowerCase();const startISO=v("f_start");
+  let days="";
+  if(fLow==="semimonthly"){days=v("f_days")||"1,15";}
+  else if(["monthly","bimonthly","quarterly","annually","yearly"].includes(fLow)){
+    const sd=parseDate(startISO);days=sd?String(sd.getDate()):"";   // the picked date IS the due day
+  }
+  const obj={active:true,group:v("f_group"),amount:toNum(v("f_amount")),frequency:freq,days:days,startDate:startISO,endDate:v("f_end"),notes:v("f_notes"),wedding:!!(wedEl&&wedEl.checked),shared:!!(shEl&&shEl.checked)};
   if(isBill){obj.name=name;obj.category=v("f_category")||obj.group;}else obj.source=name;
   const arr=isBill?S.bills:S.income;if(id){const it=arr.find(x=>x.id===id);Object.assign(it,obj);}else{obj.id=uid();arr.push(obj);}
   saveState();closeModal();renderAll();toast("Saved");}
